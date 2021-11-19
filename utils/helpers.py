@@ -3,6 +3,32 @@ import awkward as ak
 import matplotlib.pyplot as plt
 import h5py
 
+from matplotlib import animation
+import os
+%matplotlib qt
+
+def animate(X,y,t_bins,images=range(-1,1),interval=500):
+    """
+    Animate images, from -5 to 5 (es and photons)
+    """
+    for i in images:
+        img = []
+        fig = plt.figure()
+        if y[i] == 1:
+            fig.suptitle('Electron')
+        else:
+            fig.suptitle('Photon')
+        for j in range(X.shape[1]-1):
+            label = f'{t_bins[j]:.2f} < t < {t_bins[j+1]:.2f}'
+            temp_img = X[i,j,:,:]
+            img.append([plt.imshow(temp_img,animated=True),plt.text(18,28,label)])
+        ani = animation.ArtistAnimation(fig, img, interval=interval, blit=True,repeat_delay=0)
+        plt.show()
+        ani.save(f'Energy_{i+abs(images[0])}.gif')
+        plt.close()
+    os.system('mv *.gif gifs/')
+    plt.close()
+
 img_rows, img_cols, nb_channels = 32, 32, 2        
 input_dir = 'data'
 decays = ['SinglePhotonPt50_IMGCROPS_n249k_RHv1', 'SingleElectronPt50_IMGCROPS_n249k_RHv1']
@@ -22,6 +48,7 @@ def remove_empty_pixels(X):
     X = np.concatenate([e_X[:,:,:,None],t_X[:,:,:,None]],axis=-1)
     return X
 
+
 def timeordered(X,cumulative=False):
     X_unraveled = X.reshape(-1,32*32,2)
     X_t_timeordered = np.sort(X_unraveled[:,:,1],axis=-1)
@@ -39,6 +66,33 @@ def timeordered(X,cumulative=False):
 
     X_e_timeordered = np.where(~frame_masks,np.nan,X_unraveled[:,None,:,0]).reshape(-1,maxframes,32,32,1)
     return X_e_timeordered,X_t_timeordered,maxframes
+def timeordered_BC(X,cumulative=False,remove_empty=True,min_t = -0.05,max_t = 0.05,t_step=0.0099):
+    """
+    X: Image dataset of 32x32 pixels
+    cumulative: Keep earlier hits in later time slices
+    min/max_t: min and max time to consider (elimnate noise and empty data)
+    t_step: time step 
+    """
+    if remove_empty:
+        X = remove_empty_pixels(X)
+    X_e,X_t = X[:,:,:,0],X[:,:,:,1] #Decompose energy and time
+    n_images,width,height,channels = X.shape #Find shape of images
+    t_bins = np.arange(min_t, max_t, t_step) #Bin separation for images
+    print(t_bins)
+    t_mats = [np.full(shape=(width,height),fill_value=t) for t in t_bins]
+    max_frames = len(t_mats)
+    X_e_timeordered = np.zeros(shape=(n_images,max_frames,width,height))
+    X_t_timeordered = np.zeros(shape=(n_images,max_frames,width,height))
+    for i in range(n_images):
+        for t in range(max_frames-1):
+            lower = X_train[i,:,:,1] > t_mats[t] #Lower bound
+            upper = X_train[i,:,:,1] <= t_mats[t+1] #Upper bound
+            is_between = np.logical_and(lower,upper) #Between upper and lower
+            X_e_timeordered[i,t,:,:] = np.where(~is_between,np.nan,X_e[i,:,:])
+            X_t_timeordered[i,t,:,:] = np.where(~is_between,np.nan,X_t[i,:,:])
+    
+    return X_e_timeordered,X_t_timeordered,max_frames,t_bins
+
 
 def plot_event(X,y,event=0,channel=-1):
     if channel == -1: channels = [0,1]
