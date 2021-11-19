@@ -38,7 +38,7 @@ def timeordered(X,cumulative=False):
         frame_masks = (X_unraveled[:,None,:,1] == X_t_timeordered[:,:,None])
 
     X_e_timeordered = np.where(~frame_masks,np.nan,X_unraveled[:,None,:,0]).reshape(-1,maxframes,32,32,1)
-    return X_e_timeordered,X_t_timeordered
+    return X_e_timeordered,X_t_timeordered,maxframes
 
 def plot_event(X,y,event=0,channel=-1):
     if channel == -1: channels = [0,1]
