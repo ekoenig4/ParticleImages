@@ -1,4 +1,5 @@
 import numpy as np
+import awkward as ak
 import matplotlib.pyplot as plt
 import h5py
 
@@ -20,6 +21,24 @@ def remove_empty_pixels(X):
     t_X = np.where(X[:,:,:,0] == 0,np.nan,X[:,:,:,1])
     X = np.concatenate([e_X[:,:,:,None],t_X[:,:,:,None]],axis=-1)
     return X
+
+def timeordered(X,cumulative=False):
+    X_unraveled = X.reshape(-1,32*32,2)
+    X_t_timeordered = np.sort(X_unraveled[:,:,1],axis=-1)
+    dup_runs = ak.run_lengths(X_t_timeordered.flatten())
+    mask = ak.unflatten(ak.sum(dup_runs)*[False],dup_runs)
+    mask = ak.flatten(ak.concatenate([~mask[:,0,None],mask[:,1:]],axis=-1)).to_numpy().reshape(X_t_timeordered.shape)
+    X_t_timeordered = np.sort(np.where(mask,X_t_timeordered,np.nan),axis=-1)
+    maxframes = np.max(np.sum(~np.isnan(X_t_timeordered),axis=-1))
+    X_t_timeordered = X_t_timeordered[:,:maxframes]
+
+    if cumulative:
+        frame_masks = (X_unraveled[:,None,:,1] <= X_t_timeordered[:,:,None])
+    else:
+        frame_masks = (X_unraveled[:,None,:,1] == X_t_timeordered[:,:,None])
+
+    X_e_timeordered = np.where(~frame_masks,np.nan,X_unraveled[:,None,:,0]).reshape(-1,maxframes,32,32,1)
+    return X_e_timeordered,X_t_timeordered
 
 def plot_event(X,y,event=0,channel=-1):
     if channel == -1: channels = [0,1]
