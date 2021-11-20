@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import h5py
 
 from matplotlib import animation
+from sklearn.metrics import roc_curve, roc_auc_score
 import os
 
 img_rows, img_cols, nb_channels = 32, 32, 2
@@ -91,12 +92,21 @@ def timeordered_BC(X, cumulative=False, remove_empty=True, min_t=-0.05, max_t=0.
         for t in range(max_frames-1):
             lower = X[i, :, :, 1] > t_mats[t]  # Lower bound
             upper = X[i, :, :, 1] <= t_mats[t+1]  # Upper bound
-            # Between upper and lower
-            is_between = np.logical_and(lower, upper)
+
+            if cumulative:
+                is_between = upper
+            else:
+                # Between upper and lower
+                is_between = np.logical_and(lower, upper)
+
             X_e_timeordered[i, t, :, :] = np.where(
                 ~is_between, np.nan, X_e[i, :, :])
             X_t_timeordered[i, t, :, :] = np.where(
                 ~is_between, np.nan, X_t[i, :, :])
+
+    if remove_empty:
+        X_e_timeordered = np.where(
+            np.isnan(X_e_timeordered), 0, X_e_timeordered)
 
     return X_e_timeordered, X_t_timeordered, max_frames, t_bins
 
@@ -185,3 +195,23 @@ def plot_spacetime(X, y, event=0):
     ax.view_init(azim=0, elev=0)
     ax.set_title(f'{decay}: SpaceTime Scatter')
     fig.tight_layout()
+
+
+def plot_roc(y_true, y_pred):
+    """Plot ROC Curve
+
+    Args:
+        y_true (numpy.array): array of true labels
+        y_pred (numpy.array): array of predicted labels
+    """
+    fpr, tpr, thresholds = roc_curve(y_true, y_pred)
+    auc = roc_auc_score(y_true, y_pred)
+
+    line = [0,1]
+    plt.plot(line,line,'k--')
+    plt.plot(fpr, tpr)
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title(f'ROC Curve (AUC = {auc:.3f})')
+    plt.show()
+
