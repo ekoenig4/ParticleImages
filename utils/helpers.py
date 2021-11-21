@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import h5py
 
 from matplotlib import animation
+from mpl_toolkits.mplot3d import Axes3D
 from sklearn.metrics import roc_curve, roc_auc_score
 import os
 
@@ -47,15 +48,30 @@ def remove_empty_pixels(X):
     X = np.concatenate([e_X[:, :, :, None], t_X[:, :, :, None]], axis=-1)
     return X
 
+def unique_times(X, remove_empty=True):
+    """Create an array of unique hit times for each event
+
+    Args:
+        X (numpy.array): array of collider images, shape(-1,32,32,2)
+        remove_empty (bool, optional): mask out pixels without any energy deposits. Defaults to True.
+
+    Returns:
+        numpy.array: array of sorted unique hit times for each event
+    """
+    if remove_empty: X = remove_empty_pixels(X)
+    X_t = X[:,:,:,1].reshape(-1,32*32) # get the time channel and flatten 
+    X_t_sorted = np.sort(X_t,axis=-1) # sort timing
+    dup_runs = ak.run_lengths(X_t_sorted.flatten()) # count number of hits that occured at the same times 
+    mask = ak.unflatten(ak.sum(dup_runs)*[False], dup_runs) # create mask to only keep one of each time
+    mask = ak.flatten(ak.concatenate(
+        [~mask[:, 0, None], mask[:, 1:]], axis=-1)).to_numpy().reshape(X_t_sorted.shape)
+    unique_X_t_sorted = np.sort(np.where(mask, X_t_sorted, np.nan), axis=-1)
+    return unique_X_t_sorted
+
 
 def timeordered(X, cumulative=False):
     X_unraveled = X.reshape(-1, 32*32, 2)
-    X_t_timeordered = np.sort(X_unraveled[:, :, 1], axis=-1)
-    dup_runs = ak.run_lengths(X_t_timeordered.flatten())
-    mask = ak.unflatten(ak.sum(dup_runs)*[False], dup_runs)
-    mask = ak.flatten(ak.concatenate(
-        [~mask[:, 0, None], mask[:, 1:]], axis=-1)).to_numpy().reshape(X_t_timeordered.shape)
-    X_t_timeordered = np.sort(np.where(mask, X_t_timeordered, np.nan), axis=-1)
+    X_t_timeordered = unique_times(X)
     maxframes = np.max(np.sum(~np.isnan(X_t_timeordered), axis=-1))
     X_t_timeordered = X_t_timeordered[:, :maxframes]
 
@@ -135,6 +151,14 @@ def animate(X, y, t_bins, images=range(-1, 1), interval=500):
     os.system('mv *.gif gifs/')
     plt.close()
 
+def inline_animation(X,y,tbins,event=0,interval=500,**kwargs):
+    decay = decayMap[y[event]]
+    fig, ax = plt.subplots()
+    frames = [
+        [ax.imshow( np.where(frame==0,np.nan,frame) ),ax.text(1,1,f"{decay}: ({tlo:.2f},{thi:.2f})")] for frame,tlo,thi in zip(X[event],tbins[:-1],tbins[1:])
+    ]
+    ani = animation.ArtistAnimation(fig,frames,interval=interval,**kwargs)
+    return ani
 
 def plot_event(X, y, event=0, channel=-1):
     """Plot channels for given event
@@ -169,7 +193,7 @@ def plot_event(X, y, event=0, channel=-1):
     fig.tight_layout()
 
 
-def plot_spacetime(X, y, event=0):
+def plot_spacetime(X, y, event=0, azim=0, elev=0, interactive=False):
     """Plot 3D spacetime of specified event
 
     Args:
@@ -184,18 +208,21 @@ def plot_spacetime(X, y, event=0):
     y = index_map[1][~np.isnan(X[event, :, :, 1])]
     z = X[event, :, :, 1][~np.isnan(X[event, :, :, 1])]
     c = X[event, :, :, 0][~np.isnan(X[event, :, :, 1])]
-    fig = plt.figure(figsize=(16, 16))
-    ax = plt.axes(projection="3d")
+    fig = plt.figure(figsize=(8,8))
+
+    if interactive:
+        ax = Axes3D(fig)
+    else:
+        ax = plt.axes(projection="3d")
 
     # Creating plot
-    ax.scatter3D(x, y, z, s=1000*c, alpha=0.5, c=c)
+    ax.scatter(x, y, z, s=1000*c, alpha=0.5, c=c)
     ax.set_xlim(10, 20)
     ax.set_ylim(10, 24)
-    ax.set(xlabel='X Coord', ylabel='Y Coord', zlabel='Time')
-    ax.view_init(azim=0, elev=0)
-    ax.set_title(f'{decay}: SpaceTime Scatter')
-    fig.tight_layout()
-
+    ax.set(xlabel='X', ylabel='Y', zlabel='Time')
+    ax.view_init(azim=azim, elev=elev)
+    ax.set_title(f'{decay}')
+    return fig
 
 def plot_roc(y_true, y_pred):
     """Plot ROC Curve
@@ -215,3 +242,50 @@ def plot_roc(y_true, y_pred):
     plt.title(f'ROC Curve (AUC = {auc:.3f})')
     plt.show()
 
+def plot_history(history,metric='loss'):
+    loss = history.history[metric]
+    val_loss = history.history[f'val_{metric}']
+    
+    plt.plot(loss,label='Training')
+    plt.plot(val_loss,label='Validation')
+    plt.xlabel('Epoch')
+    plt.ylabel(metric.capitalize())
+    plt.legend()
+    plt.show()
+
+def plot_abstime(X,y,bins=100,energy_weights=False,figax=None):
+    if figax is None: figax = plt.subplots()
+    fig,ax = figax 
+
+    ph_times = X[:,:,:,1][y == 0].flatten()
+    ph_energy = X[:,:,:,0][y == 0].flatten()
+    ph_weight = ph_energy if energy_weights else None
+
+    el_times = X[:,:,:,1][y == 1].flatten()
+    el_energy = X[:,:,:,0][y == 1].flatten()
+    el_weight = el_energy if energy_weights else None
+
+    ph_hist,bins,_ = ax.hist(np.abs(ph_times),bins=bins,density=1,histtype='step',label='Photon',weights=ph_weight)
+    el_hist,bins,_ = ax.hist(np.abs(el_times),bins=bins,density=1,histtype='step',label='Electron',weights=el_weight)
+    ax.set(xlabel='Absolute Time',ylabel='Density')
+    ax.legend()
+    return fig,ax
+
+def plot_abstime_cdf(X,y,bins=100,energy_weights=False,figax=None):
+    if figax is None: figax = plt.subplots()
+    fig,ax = figax 
+
+    ph_times = X[:,:,:,1][y == 0].flatten()
+    ph_energy = X[:,:,:,0][y == 0].flatten()
+    ph_weight = ph_energy if energy_weights else None
+
+    el_times = X[:,:,:,1][y == 1].flatten()
+    el_energy = X[:,:,:,0][y == 1].flatten()
+    el_weight = el_energy if energy_weights else None
+
+    ph_cdf,bins,_ = ax.hist(np.abs(ph_times.flatten()),bins=bins,density=1,histtype='step',cumulative=True,label='Photon',weights=ph_weight)
+    el_cdf,bins,_ = ax.hist(np.abs(el_times.flatten()),bins=bins,density=1,histtype='step',cumulative=True,label='Electron',weights=el_weight)
+    ax.set(xlabel='Absolute Time',ylabel='Cumulative Percent',ylim=(0.5,1.1))
+    ax.grid()
+    ax.legend()
+    return fig,ax
