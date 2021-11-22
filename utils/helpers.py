@@ -144,8 +144,8 @@ def inception2D(input,filter_sizes=[60,50,40]):
                   kernel_size=1,
                   padding='same')(layer_4)
 
-  #mid_1 = concatenate([layer_1, layer_2, layer_3, layer_4], axis = 3)
-  mid_1 = concatenate([layer_2, layer_3, layer_4], axis = 3)
+  mid_1 = concatenate([layer_1, layer_2, layer_3, layer_4], axis = 3)
+  #mid_1 = concatenate([layer_2, layer_3, layer_4], axis = 3)
   return mid_1
 
 def inception3D(input,filter_sizes=[30,20,10]):
