@@ -2,12 +2,11 @@ import numpy as np
 import awkward as ak
 import matplotlib.pyplot as plt
 import h5py
+from keras.layers import TimeDistributed, Reshape, Input, Dense, Dropout, Flatten, Conv3D, MaxPooling3D,Conv2D, MaxPooling2D,BatchNormalization,AveragePooling2D, concatenate
 
 from matplotlib import animation
 import os
-%matplotlib qt
 
-<<<<<<< Updated upstream
 def animate(X,y,t_bins,images=range(-1,1),interval=500):
     """
     Animate images, from -5 to 5 (es and photons)
@@ -29,20 +28,6 @@ def animate(X,y,t_bins,images=range(-1,1),interval=500):
         plt.close()
     os.system('mv *.gif gifs/')
     plt.close()
-=======
-from keras.layers import Conv2D, MaxPooling2D,AveragePooling2D,Conv3D, MaxPooling3D,AveragePooling3D,concatenate
-
-img_rows, img_cols, nb_channels = 32, 32, 2
-input_dir = 'data'
-decays = ['SinglePhotonPt50_IMGCROPS_n249k_RHv1',
-          'SingleElectronPt50_IMGCROPS_n249k_RHv1']
-channelMap = {0: 'Energy', 1: 'Time'}
-decayMap = {0: 'Photon', 1: 'Electron'}
-
-
-def load_data(start, stop):
-    """Load photon and electron data from data/ directory
->>>>>>> Stashed changes
 
 img_rows, img_cols, nb_channels = 32, 32, 2        
 input_dir = 'data'
@@ -81,60 +66,45 @@ def timeordered(X,cumulative=False):
 
     X_e_timeordered = np.where(~frame_masks,np.nan,X_unraveled[:,None,:,0]).reshape(-1,maxframes,32,32,1)
     return X_e_timeordered,X_t_timeordered,maxframes
-def timeordered_BC(X,cumulative=False,remove_empty=True,min_t = -0.05,max_t = 0.05,t_step=0.0099):
+def timeordered_BC(X,cumulative=False,remove_empty=True,normalize=False,min_t = -0.05,max_t = 0.05,t_step=0.0099):
     """
     X: Image dataset of 32x32 pixels
     cumulative: Keep earlier hits in later time slices
+    normalize: Max pixel is 1
     min/max_t: min and max time to consider (elimnate noise and empty data)
     t_step: time step 
     """
     if remove_empty:
         X = remove_empty_pixels(X)
-<<<<<<< Updated upstream
     X_e,X_t = X[:,:,:,0],X[:,:,:,1] #Decompose energy and time
     n_images,width,height,channels = X.shape #Find shape of images
     t_bins = np.arange(min_t, max_t, t_step) #Bin separation for images
-    print(t_bins)
     t_mats = [np.full(shape=(width,height),fill_value=t) for t in t_bins]
-=======
-    X_e, X_t = X[:, :, :, 0], X[:, :, :, 1]  # Decompose energy and time
-    n_images, width, height, channels = X.shape  # Find shape of images
-    t_bins = np.arange(min_t, max_t, t_step)  # Bin separation for images
-    t_mats = [np.full(shape=(width, height), fill_value=t) for t in t_bins]
->>>>>>> Stashed changes
     max_frames = len(t_mats)
     X_e_timeordered = np.zeros(shape=(n_images,max_frames,width,height))
     X_t_timeordered = np.zeros(shape=(n_images,max_frames,width,height))
     for i in range(n_images):
         for t in range(max_frames-1):
-<<<<<<< Updated upstream
-            lower = X_train[i,:,:,1] > t_mats[t] #Lower bound
-            upper = X_train[i,:,:,1] <= t_mats[t+1] #Upper bound
+            lower = X[i,:,:,1] > t_mats[t] #Lower bound
+            upper = X[i,:,:,1] <= t_mats[t+1] #Upper bound
             is_between = np.logical_and(lower,upper) #Between upper and lower
             X_e_timeordered[i,t,:,:] = np.where(~is_between,np.nan,X_e[i,:,:])
             X_t_timeordered[i,t,:,:] = np.where(~is_between,np.nan,X_t[i,:,:])
     
-    return X_e_timeordered,X_t_timeordered,max_frames,t_bins
-=======
-            lower = X[i, :, :, 1] > t_mats[t]  # Lower bound
-            upper = X[i, :, :, 1] <= t_mats[t+1]  # Upper bound
-
-            if cumulative:
-                is_between = upper
-            else:
-                # Between upper and lower
-                is_between = np.logical_and(lower, upper)
-
-            X_e_timeordered[i, t, :, :] = np.where(
-                ~is_between, np.nan, X_e[i, :, :])
-            X_t_timeordered[i, t, :, :] = np.where(
-                ~is_between, np.nan, X_t[i, :, :])
-
     if remove_empty:
         X_e_timeordered = np.where(
             np.isnan(X_e_timeordered), 0, X_e_timeordered)
+    if normalize:
+        X_e_timeordered = X_e_timeordered/np.nanmax(X_e_timeordered)
+    return X_e_timeordered,X_t_timeordered,max_frames,t_bins
 
-    return X_e_timeordered, X_t_timeordered, max_frames, t_bins
+def TimeDistributed_Conv(input,filters=32,kernel_size=2):
+  conv2d = Conv2D(filters=filters, 
+                  kernel_size=kernel_size, 
+                  activation='relu', 
+                  padding='same')
+  return TimeDistributed(conv2d)(input)
+    
 
 def inception2D(input,filter_sizes=[60,50,40]):
   """
@@ -242,7 +212,7 @@ def animate(X, y, t_bins, images=range(-1, 1), interval=500):
         plt.show()
         ani.save(f'Energy_{i+abs(images[0])}.gif')
         plt.close()
-    os.system('mv *.gif gifs/')
+    os.system('mv *.gif ParticleImages/gifs/')
     plt.close()
 
 def inline_animation(X,y,tbins,event=0,interval=500,**kwargs):
@@ -253,7 +223,6 @@ def inline_animation(X,y,tbins,event=0,interval=500,**kwargs):
     ]
     ani = animation.ArtistAnimation(fig,frames,interval=interval,**kwargs)
     return ani
->>>>>>> Stashed changes
 
 
 def plot_event(X,y,event=0,channel=-1):
