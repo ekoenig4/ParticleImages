@@ -3,6 +3,7 @@ import awkward as ak
 import matplotlib.pyplot as plt
 import h5py
 from keras.layers import TimeDistributed, Reshape, Input, Dense, Dropout, Flatten, Conv3D, MaxPooling3D,Conv2D, MaxPooling2D,BatchNormalization,AveragePooling2D, concatenate
+from sklearn.metrics import roc_curve, auc, confusion_matrix,roc_auc_score
 
 from matplotlib import animation
 import os
@@ -327,3 +328,78 @@ def plot_energy(X,bw=0.005):
   ax.set_yscale('log')
   ax.set_ylabel(r'$E$ [GeV]')
   ax.set_title('Calorimeter Energy')
+
+def time_channels(X,normalize=False):
+    #X from raw data
+    X_temp,_,_,_,_,_ = timeordered_BC(X,remove_empty=True,cumulative=True,normalize=normalize,min_t=-0.015,max_t=0.01,t_step=0.00079)
+    xt = np.sum(X_temp,axis=3)
+    xy = np.sum(X_temp,axis=1)
+    yt = np.sum(X_temp,axis=2)
+    return np.stack((xy,xt,yt),axis=3) #xy is channel 0, xt is channel 1, yt is channel 2
+def plot_history(history,metric='loss'):
+    loss = history.history[metric]
+    val_loss = history.history[f'val_{metric}']
+    
+    plt.plot(loss,label='Training')
+    plt.plot(val_loss,label='Validation')
+    plt.xlabel('Epoch')
+    plt.ylabel(metric.capitalize())
+    plt.legend()
+    plt.show()
+def plot_roc(y_true, y_pred):
+    """Plot ROC Curve
+    Args:
+        y_true (numpy.array): array of true labels
+        y_pred (numpy.array): array of predicted labels
+    """
+    fpr, tpr, thresholds = roc_curve(y_true, y_pred)
+    auc = roc_auc_score(y_true, y_pred)
+
+    line = [0,1]
+    plt.plot(line,line,'k--')
+    plt.plot(fpr, tpr)
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title(f'ROC Curve (AUC = {auc:.3f})')
+    plt.show()
+
+def average_slice(tc_data,y):
+  tc_data_e = [] #Electron
+  tc_data_p = [] #Photon
+  for i in range(tc_data.shape[0]):
+    if y[i] == 0: #Electron
+      tc_data_e.append(tc_data[i,:,:,:])
+    if y[i] == 1: #Photon
+      tc_data_p.append(tc_data[i,:,:,:])
+  tc_data_e = np.asarray(tc_data_e) #Electron
+  tc_data_p = np.asarray(tc_data_p) #Photon
+  average_data_e = np.average(tc_data_e,axis=0)
+  average_data_p = np.average(tc_data_p,axis=0)
+  return tc_data_e,tc_data_p,average_data_e,average_data_p
+
+def plot_avgtcdecomposition(avg_tc,figtitle='None'):
+  fig, (ax1,ax2,ax3) = plt.subplots(1, 3)
+  fig.set_figheight(4)
+  fig.set_figwidth(12)
+  fig.suptitle(figtitle)
+  ax1.imshow(avg_tc[:,:,0])
+  ax1.set(xlabel='x',ylabel='y')
+
+  ax2.imshow(avg_tc[:,:,1])
+  ax2.set(xlabel='t',ylabel='x')
+
+  ax3.imshow(avg_tc[:,:,2])
+  ax3.set(xlabel='t',ylabel='y')
+def plot_tcdecomposition(tc,figtitle='None',event=0):
+  fig, (ax1,ax2,ax3) = plt.subplots(1, 3)
+  fig.set_figheight(4)
+  fig.set_figwidth(12)
+  fig.suptitle(f'{figtitle} Event: {event}')
+  ax1.imshow(tc[event,:,:,0])
+  ax1.set(xlabel='x',ylabel='y')
+
+  ax2.imshow(tc[event,:,:,1])
+  ax2.set(xlabel='t',ylabel='x')
+
+  ax3.imshow(tc[event,:,:,2])
+  ax3.set(xlabel='t',ylabel='y')
