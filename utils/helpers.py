@@ -15,6 +15,18 @@ decays = ['SinglePhotonPt50_IMGCROPS_n249k_RHv1',
 channelMap = {0: 'Energy', 1: 'Time'}
 decayMap = {0: 'Photon', 1: 'Electron'}
 
+class MinMaxScaler:
+    def __init__(self,energy_cutoff=0.0):
+        self.cutoff = energy_cutoff
+    def fit(self,X):
+        self.minim = np.nanmin(X)
+        self.maxim = np.nanmax(X)
+        self.cutoff = (self.cutoff-self.minim)/(self.maxim-self.minim)
+        return self
+    def transform(self,X):
+        X = (X-self.minim)/(self.maxim-self.minim)
+        X = np.where(X > self.cutoff, X, 0)
+        return X
 
 def load_data(start, stop):
     """Load photon and electron data from data/ directory
@@ -33,8 +45,40 @@ def load_data(start, stop):
     assert len(X) == len(y)
     return X, y
 
+def load_train_valid_test(train_size,valid_size,test_size,batch_size):
+    """Load training, validation, and test data 
 
-def remove_empty_pixels(X):
+    Args:
+        train_size (int): training size
+        valid_size (int): validation size
+        test_size (int): testing size
+        batch_size (int): batch size
+    """
+    # Set range of training set
+    train_start, train_stop = 0, train_size
+    assert train_stop > train_start
+    assert (len(decays)*train_size) % batch_size == 0
+    X_train, y_train = load_data(train_start,train_stop)
+
+    # Set range of validation set
+    valid_start, valid_stop = 160000, 160000+valid_size
+    assert valid_stop  >  valid_start
+    assert valid_start >= train_stop
+    X_valid, y_valid = load_data(valid_start,valid_stop)
+
+    # Set range of test set
+    test_start, test_stop = 204800, 204800+test_size
+    assert test_stop  >  test_start
+    assert test_start >= valid_stop
+    X_test, y_test = load_data(test_start,test_stop)
+
+    samples_requested = len(decays) * (train_size + valid_size + test_size)
+    samples_available = len(y_train) + len(y_valid) + len(y_test)
+    assert samples_requested == samples_available
+    return (X_train,y_train),(X_valid,y_valid),(X_test,y_test)
+
+
+def remove_empty_pixels(X,low_e=0,abstime=100):
     """Set empty energy deposit pixels to np.nan
 
     Args:
@@ -43,8 +87,9 @@ def remove_empty_pixels(X):
     Returns:
         X (numpy.array): array of collider images, shape(-1,32,32,2)
     """
-    e_X = np.where(X[:, :, :, 0] == 0, np.nan, X[:, :, :, 0])
-    t_X = np.where(X[:, :, :, 0] == 0, np.nan, X[:, :, :, 1])
+    mask = (X[:, :, :, 0] > low_e) & (np.abs(X[:,:,:,1]) < abstime)
+    e_X = np.where(~mask, np.nan, X[:, :, :, 0])
+    t_X = np.where(~mask, np.nan, X[:, :, :, 1])
     X = np.concatenate([e_X[:, :, :, None], t_X[:, :, :, None]], axis=-1)
     return X
 
@@ -87,7 +132,7 @@ def timeordered(X, cumulative=False):
     return X_e_timeordered, X_t_timeordered, maxframes
 
 
-def timeordered_BC(X, cumulative=False, remove_empty=True, min_t=-0.05, max_t=0.05, t_step=0.0099):
+def timeordered_BC(X, cumulative=False, remove_empty=True, low_e=0.005, min_t=-0.05, max_t=0.05, t_step=0.0099):
     """
     X: Image dataset of 32x32 pixels
     cumulative: Keep earlier hits in later time slices
@@ -95,11 +140,10 @@ def timeordered_BC(X, cumulative=False, remove_empty=True, min_t=-0.05, max_t=0.
     t_step: time step 
     """
     if remove_empty:
-        X = remove_empty_pixels(X)
+        X = remove_empty_pixels(X,low_e)
     X_e, X_t = X[:, :, :, 0], X[:, :, :, 1]  # Decompose energy and time
     n_images, width, height, channels = X.shape  # Find shape of images
     t_bins = np.arange(min_t, max_t, t_step)  # Bin separation for images
-    print(t_bins)
     t_mats = [np.full(shape=(width, height), fill_value=t) for t in t_bins]
     max_frames = len(t_mats)
     X_e_timeordered = np.zeros(shape=(n_images, max_frames, width, height))
@@ -151,14 +195,20 @@ def animate(X, y, t_bins, images=range(-1, 1), interval=500):
     os.system('mv *.gif gifs/')
     plt.close()
 
-def inline_animation(X,y,tbins,event=0,interval=500,**kwargs):
+def inline_animation(X,y,tbins,event=0,lo=0,interval=500,**kwargs):
     decay = decayMap[y[event]]
     fig, ax = plt.subplots()
     frames = [
-        [ax.imshow( np.where(frame==0,np.nan,frame) ),ax.text(1,1,f"{decay}: ({tlo:.2f},{thi:.2f})")] for frame,tlo,thi in zip(X[event],tbins[:-1],tbins[1:])
+        [ax.imshow( np.where(frame<=lo,np.nan,frame) ),ax.text(1,1,f"{decay}: ({tlo:.2f},{thi:.2f})")] for frame,tlo,thi in zip(X[event],tbins[:-1],tbins[1:])
     ]
     ani = animation.ArtistAnimation(fig,frames,interval=interval,**kwargs)
     return ani
+
+def plot_image(X,mask=True,lo=0,figax=None):
+    if figax is None: figax = plt.subplots()
+    fig,ax = figax 
+    if mask: X = np.where(X<=lo,np.nan,X)
+    ax.imshow(X)
 
 def plot_event(X, y, event=0, channel=-1):
     """Plot channels for given event
@@ -193,7 +243,7 @@ def plot_event(X, y, event=0, channel=-1):
     fig.tight_layout()
 
 
-def plot_spacetime(X, y, event=0, azim=0, elev=0, interactive=False):
+def plot_spacetime(X, y, event=0, azim=0, elev=0, lo=0, interactive=False):
     """Plot 3D spacetime of specified event
 
     Args:
@@ -202,6 +252,8 @@ def plot_spacetime(X, y, event=0, azim=0, elev=0, interactive=False):
         event (int, optional): index of event to plot. Defaults to 0.
     """
     index_map = np.indices((32, 32))
+
+    X = remove_empty_pixels(X,lo)
 
     decay = decayMap[y[event]]
     x = index_map[0][~np.isnan(X[event, :, :, 1])]
@@ -216,13 +268,15 @@ def plot_spacetime(X, y, event=0, azim=0, elev=0, interactive=False):
         ax = plt.axes(projection="3d")
 
     # Creating plot
-    ax.scatter(x, y, z, s=1000*c, alpha=0.5, c=c)
+    sc = ax.scatter(x, y, z, s=1000*c, alpha=0.5, c=c)
     ax.set_xlim(10, 20)
-    ax.set_ylim(10, 24)
+    ax.set_ylim(10, 20)
+    ax.set_zlim(-0.015,0.01)
     ax.set(xlabel='X', ylabel='Y', zlabel='Time')
     ax.view_init(azim=azim, elev=elev)
     ax.set_title(f'{decay}')
-    return fig
+    # fig.colorbar(sc)
+    return fig,ax
 
 def plot_roc(y_true, y_pred):
     """Plot ROC Curve
@@ -243,8 +297,10 @@ def plot_roc(y_true, y_pred):
     plt.show()
 
 def plot_history(history,metric='loss'):
-    loss = history.history[metric]
-    val_loss = history.history[f'val_{metric}']
+    if type(history) != dict: history = history.history
+
+    loss = history[metric]
+    val_loss = history[f'val_{metric}']
     
     plt.plot(loss,label='Training')
     plt.plot(val_loss,label='Validation')
