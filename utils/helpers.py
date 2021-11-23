@@ -66,7 +66,7 @@ def timeordered(X,cumulative=False):
 
     X_e_timeordered = np.where(~frame_masks,np.nan,X_unraveled[:,None,:,0]).reshape(-1,maxframes,32,32,1)
     return X_e_timeordered,X_t_timeordered,maxframes
-def timeordered_BC(X,cumulative=False,remove_empty=True,normalize=False,min_t = -0.05,max_t = 0.05,t_step=0.0099):
+def timeordered_BC(X,cumulative=False,cutoff=0.,remove_empty=True,normalize=False,min_t = -0.05,max_t = 0.05,t_step=0.0099):
     """
     X: Image dataset of 32x32 pixels
     cumulative: Keep earlier hits in later time slices
@@ -83,20 +83,33 @@ def timeordered_BC(X,cumulative=False,remove_empty=True,normalize=False,min_t = 
     max_frames = len(t_mats)
     X_e_timeordered = np.zeros(shape=(n_images,max_frames,width,height))
     X_t_timeordered = np.zeros(shape=(n_images,max_frames,width,height))
+    X_e_max = np.zeros(shape=(n_images,width,height))
+    X_t_max = np.zeros(shape=(n_images,width,height))
     for i in range(n_images):
+        counts = [] #Keep track of number of nonzero pixels in each frame
         for t in range(max_frames-1):
             lower = X[i,:,:,1] > t_mats[t] #Lower bound
             upper = X[i,:,:,1] <= t_mats[t+1] #Upper bound
             is_between = np.logical_and(lower,upper) #Between upper and lower
+            counts.append(np.count_nonzero(is_between))
             X_e_timeordered[i,t,:,:] = np.where(~is_between,np.nan,X_e[i,:,:])
             X_t_timeordered[i,t,:,:] = np.where(~is_between,np.nan,X_t[i,:,:])
+            index = np.argmax(counts) #Index of max counts
+            X_e_max[i,:,:] = X_e_timeordered[i,index,:,:]
+            X_t_max[i,:,:] = X_t_timeordered[i,index,:,:]
+
+
     
+    cutoff_mat = np.full(X_e_timeordered.shape,cutoff)
+    X_e_timeordered = np.where(X_e_timeordered >= cutoff_mat,X_e_timeordered,0.)
+    
+        
     if remove_empty:
         X_e_timeordered = np.where(
             np.isnan(X_e_timeordered), 0, X_e_timeordered)
     if normalize:
         X_e_timeordered = X_e_timeordered/np.nanmax(X_e_timeordered)
-    return X_e_timeordered,X_t_timeordered,max_frames,t_bins
+    return X_e_timeordered,X_t_timeordered,max_frames,t_bins,X_e_max,X_t_max
 
 def TimeDistributed_Conv(input,filters=32,kernel_size=2):
   conv2d = Conv2D(filters=filters, 
@@ -266,3 +279,51 @@ def plot_spacetime(X,y,event=0):
     ax.view_init(azim=0, elev=0)
     ax.set_title(f'{decay}: SpaceTime Scatter')
     fig.tight_layout()
+
+def plot_abstime(X,y,bins=100,energy_weights=False,figax=None):
+    if figax is None: figax = plt.subplots()
+    fig,ax = figax 
+
+    ph_times = X[:,:,:,1][y == 0].flatten()
+    ph_energy = X[:,:,:,0][y == 0].flatten()
+    ph_weight = ph_energy if energy_weights else None
+
+    el_times = X[:,:,:,1][y == 1].flatten()
+    el_energy = X[:,:,:,0][y == 1].flatten()
+    el_weight = el_energy if energy_weights else None
+
+    ph_hist,bins,_ = ax.hist(np.abs(ph_times),bins=bins,density=1,histtype='step',label='Photon',weights=ph_weight)
+    el_hist,bins,_ = ax.hist(np.abs(el_times),bins=bins,density=1,histtype='step',label='Electron',weights=el_weight)
+    ax.set(xlabel='Absolute Time',ylabel='Density')
+    ax.legend()
+    return fig,ax
+
+def plot_abstime_cdf(X,y,bins=100,energy_weights=False,figax=None):
+    if figax is None: figax = plt.subplots()
+    fig,ax = figax 
+
+    ph_times = X[:,:,:,1][y == 0].flatten()
+    ph_energy = X[:,:,:,0][y == 0].flatten()
+    ph_weight = ph_energy if energy_weights else None
+
+    el_times = X[:,:,:,1][y == 1].flatten()
+    el_energy = X[:,:,:,0][y == 1].flatten()
+    el_weight = el_energy if energy_weights else None
+
+    ph_cdf,bins,_ = ax.hist(np.abs(ph_times.flatten()),bins=bins,density=1,histtype='step',cumulative=True,label='Photon',weights=ph_weight)
+    el_cdf,bins,_ = ax.hist(np.abs(el_times.flatten()),bins=bins,density=1,histtype='step',cumulative=True,label='Electron',weights=el_weight)
+    ax.set(xlabel='Absolute Time',ylabel='Cumulative Percent',ylim=(0.5,1.1))
+    ax.grid()
+    ax.legend()
+    return fig,ax
+
+def plot_energy(X,bw=0.005):
+  #Feed raw X data
+  fig = plt.figure()
+  ax = fig.add_subplot(111)
+  bw = bw
+  bins = np.arange(min(X[:,:,:,0].flatten()), max(X[:,:,:,0].flatten()) + bw, bw)
+  ax.hist(X[:,:,:,0].flatten(),bins=bins)
+  ax.set_yscale('log')
+  ax.set_ylabel(r'$E$ [GeV]')
+  ax.set_title('Calorimeter Energy')
