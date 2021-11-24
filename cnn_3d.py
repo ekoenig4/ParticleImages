@@ -7,7 +7,7 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.utils import to_categorical
 from keras.utils.vis_utils import plot_model
-from keras.layers import AveragePooling3D,ConvLSTM2D,TimeDistributed, Reshape, Input, Dense, Dropout, Flatten, Conv3D, MaxPooling3D,Conv2D, MaxPooling2D,BatchNormalization,AveragePooling2D, concatenate
+from keras.layers import GlobalAveragePooling3D,AveragePooling3D,ConvLSTM2D,TimeDistributed, Reshape, Input, Dense, Dropout, Flatten, Conv3D, MaxPooling3D,Conv2D, MaxPooling2D,BatchNormalization,AveragePooling2D, concatenate
 from keras.models import Sequential,Model
 from tensorflow.keras.optimizers import Adam
 from keras.callbacks import ReduceLROnPlateau
@@ -63,32 +63,33 @@ y_b_test = to_categorical(y_test)
 
 
 input_img = Input(shape=(maxframes,32, 32, 1))
-conv3d_1 = Conv3D(filters=16,
-                  kernel_size=3,
-                  activation='relu')(input_img)
-conv3d_2 = Conv3D(filters=32,
-                  kernel_size=3,
-                  activation='relu')(conv3d_1)
-mp3d_1 = MaxPooling3D(strides=2)(conv3d_2)
-dropout_1 = Dropout(0.4)(mp3d_1)
-conv3d_3 = Conv3D(filters=48,
-                  kernel_size=2,
-                  activation='relu')(dropout_1)
-conv3d_4 = Conv3D(filters=64,
-                  kernel_size=2,
-                  activation='relu')(conv3d_3)
-bn_1 = BatchNormalization()(conv3d_4)
-flatten_1 = Flatten()(bn_1)
-dense_1 = Dense(2000,activation='relu')(flatten_1)
-dropout_2 = Dropout(0.4)(dense_1)
-dense_2 = Dense(1000,activation='relu')(dropout_2)
-dropout_2 = Dropout(0.4)(dense_2)
-output = Dense(1, activation='sigmoid', kernel_initializer='TruncatedNormal')(dropout_2)
+
+x = Conv3D(filters=64, kernel_size=3, activation="relu")(input_img)
+x = MaxPooling3D(pool_size=2)(x)
+x = BatchNormalization()(x)
+
+x = Conv3D(filters=64, kernel_size=3, activation="relu")(x)
+x = MaxPooling3D(2)(x)
+x = BatchNormalization()(x)
+
+x = Conv3D(filters=128, kernel_size=3, activation="relu")(x)
+x = MaxPooling3D(2)(x)
+x = BatchNormalization()(x)
+
+x = Conv3D(filters=256, kernel_size=3, activation="relu")(x)
+x = MaxPooling3D(2)(x)
+x = BatchNormalization()(x)
+
+x = GlobalAveragePooling3D()(x)
+x = Dense(units=512, activation="relu")(x)
+x = Dropout(0.3)(x)
+
+output = Dense(1, activation='sigmoid', kernel_initializer='TruncatedNormal')(x)
 model = Model([input_img],output)
 
 model.summary()
 model.compile(loss='binary_crossentropy', optimizer=Adam(learning_rate=lr_init),metrics=['accuracy'])
-plot_model(model,show_shapes=True,to_file='cnn_3d_3.png')
+plot_model(model,show_shapes=True,to_file='cnn_3d_4.png')
 system('mv *.png Models/')
 
 print('Running model\n*\n*\n*\n*\n*\n_________________________________________________________________\n')
