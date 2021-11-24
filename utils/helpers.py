@@ -439,3 +439,41 @@ def google_net(input):
   dense_1 = Dense(1000,activation='relu')(dropout_1)
   output = Dense(1, activation='sigmoid', kernel_initializer='TruncatedNormal')(dense_1)
   return Model([input],output)
+<<<<<<< HEAD
+=======
+
+def plot_spacetime(X, y, event=0, azim=0, elev=0, lo=0, interactive=False):
+    """Plot 3D spacetime of specified event
+    Args:
+        X (numpy.array): array of collider images, shape(-1,32,32,2)
+        y (numpy.array): array of collider image labels: Photon = 0, Electron = 1
+        event (int, optional): index of event to plot. Defaults to 0.
+    """
+    index_map = np.indices((32, 32))
+
+    X = remove_empty_pixels(X,lo)
+
+    decay = decayMap[y[event]]
+    x = index_map[0][~np.isnan(X[event, :, :, 1])]
+    y = index_map[1][~np.isnan(X[event, :, :, 1])]
+    z = X[event, :, :, 1][~np.isnan(X[event, :, :, 1])]
+    c = X[event, :, :, 0][~np.isnan(X[event, :, :, 1])]
+    fig = plt.figure(figsize=(8,8))
+
+    if interactive:
+        ax = Axes3D(fig)
+    else:
+        ax = plt.axes(projection="3d")
+
+    # Creating plot
+    sc = ax.scatter(x, y, z, s=1000*c, alpha=0.5, c=c)
+    ax.set_xlim(10, 20)
+    ax.set_ylim(10, 20)
+    ax.set_zlim(-0.015,0.01)
+    ax.set(xlabel='X', ylabel='Y', zlabel='Time')
+    ax.view_init(azim=azim, elev=elev)
+    ax.set_title(f'{decay}')
+    # fig.colorbar(sc)
+    return fig,ax
+    
+>>>>>>> 7e83c1ae06a7500753f66b2afbddf859c61e48be
