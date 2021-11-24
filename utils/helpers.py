@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import h5py
 from keras.layers import TimeDistributed, Reshape, Input, Dense, Dropout, Flatten, Conv3D, MaxPooling3D,Conv2D, MaxPooling2D,BatchNormalization,AveragePooling2D, concatenate
 from sklearn.metrics import roc_curve, auc, confusion_matrix,roc_auc_score
+from keras.models import Model
 
 from matplotlib import animation
 import os
@@ -100,7 +101,7 @@ def timeordered_BC(X,cumulative=False,cutoff=0.,remove_empty=True,normalize=Fals
             X_t_max[i,:,:] = X_t_timeordered[i,index,:,:]
 
 
-    
+    #did it work
     cutoff_mat = np.full(X_e_timeordered.shape,cutoff)
     X_e_timeordered = np.where(X_e_timeordered >= cutoff_mat,X_e_timeordered,0.)
     
@@ -403,3 +404,38 @@ def plot_tcdecomposition(tc,figtitle='None',event=0):
 
   ax3.imshow(tc[event,:,:,2])
   ax3.set(xlabel='t',ylabel='y')
+
+def google_net(input):
+  conv2d_1 = Conv2D(strides=1,
+                  filters=200, 
+                  activation='relu', 
+                  kernel_size=3, 
+                  padding='same', 
+                  kernel_initializer='TruncatedNormal')(input)
+  max_pool_1 = MaxPooling2D(pool_size=2,strides=2,padding='same')(conv2d_1)
+  conv2d_2 = Conv2D(strides=1,
+                  filters=400, 
+                  activation='relu', 
+                  kernel_size=1, 
+                  padding='same', 
+                  kernel_initializer='TruncatedNormal')(max_pool_1)
+  max_pool_2 = MaxPooling2D(pool_size=2,strides=1,padding='same')(conv2d_2)
+  inception_1 = inception2D(max_pool_2)
+  inception_2 = inception2D(inception_1)
+  max_pool_3 = MaxPooling2D(pool_size=2,strides=2,padding='same')(inception_2)
+  filter_sizes=[80,60,40]
+  inception_3 = inception2D(max_pool_3,filter_sizes=filter_sizes)
+  inception_4 = inception2D(inception_3,filter_sizes=filter_sizes)
+  inception_5 = inception2D(inception_4,filter_sizes=filter_sizes)
+  inception_6 = inception2D(inception_5,filter_sizes=filter_sizes)
+  inception_7 = inception2D(inception_6,filter_sizes=filter_sizes)
+  max_pool_4 = MaxPooling2D(pool_size=2,strides=2,padding='same')(inception_7)
+  filter_sizes=[80,60,40]
+  inception_8 = inception2D(max_pool_4,filter_sizes=filter_sizes)
+  inception_9 = inception2D(inception_8,filter_sizes=filter_sizes)
+  avg_pool_5 = AveragePooling2D(pool_size=2,padding='same')(inception_9)
+  flat_1 = Flatten()(avg_pool_5)
+  dropout_1 = Dropout(0.4)(flat_1)
+  dense_1 = Dense(1000,activation='relu')(dropout_1)
+  output = Dense(1, activation='sigmoid', kernel_initializer='TruncatedNormal')(dense_1)
+  return Model([input],output)
