@@ -378,7 +378,7 @@ def plot_history(history,metric='loss',save=False,fname=''):
         save_plot(fname)
     else:
         plt.show()
-def plot_roc(y_true, y_pred):
+def plot_roc(y_true, y_pred,save=False,fname=''):
     """Plot ROC Curve
     Args:
         y_true (numpy.array): array of true labels
@@ -393,7 +393,10 @@ def plot_roc(y_true, y_pred):
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
     plt.title(f'ROC Curve (AUC = {auc:.3f})')
-    plt.show()
+    if save:
+        save_plot(fname)
+    else:
+        plt.show()
 
 def average_slice(tc_data,y):
   tc_data_e = [] #Electron
