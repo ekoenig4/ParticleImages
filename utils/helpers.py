@@ -101,7 +101,7 @@ def timeordered_BC(X,cumulative=False,cutoff=0.,remove_empty=True,normalize=Fals
             X_t_max[i,:,:] = X_t_timeordered[i,index,:,:]
 
 
-    
+    #did it work
     cutoff_mat = np.full(X_e_timeordered.shape,cutoff)
     X_e_timeordered = np.where(X_e_timeordered >= cutoff_mat,X_e_timeordered,0.)
     
