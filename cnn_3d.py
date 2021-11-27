@@ -1,7 +1,7 @@
 import numpy as np
 import awkward as ak
 from tensorflow.python.keras.backend import batch_normalization
-np.random.seed(1337)  # for reproducibility
+np.random.seed(69)  # for reproducibility
 
 from tensorflow import keras 
 from tensorflow.keras import layers
@@ -10,7 +10,7 @@ from keras.utils.vis_utils import plot_model
 from keras.layers import GlobalAveragePooling3D,AveragePooling3D,ConvLSTM2D,TimeDistributed, Reshape, Input, Dense, Dropout, Flatten, Conv3D, MaxPooling3D,Conv2D, MaxPooling2D,BatchNormalization,AveragePooling2D, concatenate
 from keras.models import Sequential,Model
 from tensorflow.keras.optimizers import Adam
-from keras.callbacks import ReduceLROnPlateau
+from keras.callbacks import ReduceLROnPlateau,ModelCheckpoint
 
 from os import system
 from os.path import exists
@@ -22,15 +22,15 @@ import matplotlib.pyplot as plt
 import utils as pic
 
 lr_init     = 1.e-3    # Initial learning rate  
-batch_size  = 64       # Training batch size
-train_size  = 2048     # Training size
-valid_size  = 1024     # Validation size
-test_size   = 1024     # Test size
-epochs      = 10       # Number of epochs
+batch_size  = 250       # Training batch size
+train_size  = 10000     # Training size
+valid_size  = 5000     # Validation size
+test_size   = 5000     # Test size
+epochs      = 50       # Number of epochs
 doGPU       = False    # Use GPU
 min_t       =-0.015 #Min time
 max_t       =0.01 #Max time
-t_step      =0.00199 #time step
+t_step      =0.00099 #time step
 
 # Set range of training set
 train_start, train_stop = 0, train_size
@@ -64,28 +64,29 @@ y_b_test = to_categorical(y_test)
 
 input_img = Input(shape=(maxframes,32, 32, 1))
 
-x = Conv3D(filters=64, kernel_size=3, activation="relu")(input_img)
+x = Conv3D(filters=64, kernel_size=3,padding='same', activation='relu')(input_img)
 x = MaxPooling3D(pool_size=2)(x)
 x = BatchNormalization()(x)
 
-x = Conv3D(filters=64, kernel_size=3, activation="relu")(x)
+x = Conv3D(filters=64, kernel_size=3,padding='same',activation='relu')(x)
 x = MaxPooling3D(2)(x)
 x = BatchNormalization()(x)
 
-x = Conv3D(filters=128, kernel_size=3, activation="relu")(x)
+x = Conv3D(filters=128, kernel_size=3,padding='same', activation='relu')(x)
 x = MaxPooling3D(2)(x)
 x = BatchNormalization()(x)
 
-x = Conv3D(filters=256, kernel_size=3, activation="relu")(x)
-x = MaxPooling3D(2)(x)
+x = Conv3D(filters=256, kernel_size=3,padding='same', activation='relu')(x)
+#x = MaxPooling3D(2)(x)
 x = BatchNormalization()(x)
 
 x = GlobalAveragePooling3D()(x)
-x = Dense(units=512, activation="relu")(x)
+#x = Flatten()(x)
+x = Dense(units=512, activation='relu')(x)
 x = Dropout(0.3)(x)
 
 output = Dense(1, activation='sigmoid', kernel_initializer='TruncatedNormal')(x)
-model = Model([input_img],output)
+model = Model([input_img],output,name='cnn_3d_1')
 
 model.summary()
 model.compile(loss='binary_crossentropy', optimizer=Adam(learning_rate=lr_init),metrics=['accuracy'])
@@ -94,6 +95,7 @@ system('mv *.png Models/')
 
 print('Running model\n*\n*\n*\n*\n*\n_________________________________________________________________\n')
 reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=2, min_lr=1.e-6)
+checkpoint_cb = keras.callbacks.ModelCheckpoint("conv3d_1.h5", save_best_only=True)
 
 history = model.fit(
     X_e_train, y_train,
@@ -101,7 +103,7 @@ history = model.fit(
     epochs=epochs,
     batch_size=batch_size,
     shuffle=True,
-    callbacks=[reduce_lr],
+    callbacks=[checkpoint_cb,reduce_lr],
     verbose=1
 )
 

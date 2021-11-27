@@ -439,8 +439,6 @@ def google_net(input):
   dense_1 = Dense(1000,activation='relu')(dropout_1)
   output = Dense(1, activation='sigmoid', kernel_initializer='TruncatedNormal')(dense_1)
   return Model([input],output)
-<<<<<<< HEAD
-=======
 
 def plot_spacetime(X, y, event=0, azim=0, elev=0, lo=0, interactive=False):
     """Plot 3D spacetime of specified event
@@ -476,4 +474,3 @@ def plot_spacetime(X, y, event=0, azim=0, elev=0, lo=0, interactive=False):
     # fig.colorbar(sc)
     return fig,ax
     
->>>>>>> 7e83c1ae06a7500753f66b2afbddf859c61e48be
