@@ -8,6 +8,34 @@ from keras.models import Model
 
 from matplotlib import animation
 import os
+from datetime import date
+
+#Plot organization
+def format_plots():
+  if 'science' in plt.style.available:
+    plt.style.use('science')
+  else:
+    os.system('pip install SciencePlots -q')
+    plt.style.reload_library()
+    plt.style.use('science')
+
+
+
+def make_plot_dir():
+    day = date.today().strftime("%d_%m_%Y")
+    isDir = os.path.isdir("Plots/Plots_"+day)
+    if isDir == False:
+        os.system("mkdir -p Plots_" +day)
+        os.system("mv -n Plots_" +day+"/ Plots/")
+
+def save_plot(fname):
+    day = date.today().strftime("%d_%m_%Y")
+    plt.savefig(fname,bbox_inches = "tight")
+    os.system("mv " + fname + "* Plots/Plots_" +day+"/")
+
+def plot_stuff():
+  format_plots()
+  make_plot_dir()
 
 def animate(X,y,t_bins,images=range(-1,1),interval=500):
     """
@@ -337,7 +365,7 @@ def time_channels(X,normalize=False):
     xy = np.sum(X_temp,axis=1)
     yt = np.sum(X_temp,axis=2)
     return np.stack((xy,xt,yt),axis=3) #xy is channel 0, xt is channel 1, yt is channel 2
-def plot_history(history,metric='loss'):
+def plot_history(history,metric='loss',save=False,fname=''):
     loss = history.history[metric]
     val_loss = history.history[f'val_{metric}']
     
@@ -346,7 +374,10 @@ def plot_history(history,metric='loss'):
     plt.xlabel('Epoch')
     plt.ylabel(metric.capitalize())
     plt.legend()
-    plt.show()
+    if save:
+        save_plot(fname)
+    else:
+        plt.show()
 def plot_roc(y_true, y_pred):
     """Plot ROC Curve
     Args:
