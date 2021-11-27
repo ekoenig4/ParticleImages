@@ -1,11 +1,7 @@
 import numpy as np
 import awkward as ak
-import matplotlib.pyplot as plt
 import h5py
 
-from matplotlib import animation
-from mpl_toolkits.mplot3d import Axes3D
-from sklearn.metrics import roc_curve, roc_auc_score
 import os
 
 img_rows, img_cols, nb_channels = 32, 32, 2
@@ -15,18 +11,22 @@ decays = ['SinglePhotonPt50_IMGCROPS_n249k_RHv1',
 channelMap = {0: 'Energy', 1: 'Time'}
 decayMap = {0: 'Photon', 1: 'Electron'}
 
+
 class MinMaxScaler:
-    def __init__(self,energy_cutoff=0.0):
+    def __init__(self, energy_cutoff=0.0):
         self.cutoff = energy_cutoff
-    def fit(self,X):
+
+    def fit(self, X):
         self.minim = np.nanmin(X)
         self.maxim = np.nanmax(X)
         self.cutoff = (self.cutoff-self.minim)/(self.maxim-self.minim)
         return self
-    def transform(self,X):
+
+    def transform(self, X):
         X = (X-self.minim)/(self.maxim-self.minim)
         X = np.where(X > self.cutoff, X, 0)
         return X
+
 
 def load_data(start, stop):
     """Load photon and electron data from data/ directory
@@ -45,7 +45,8 @@ def load_data(start, stop):
     assert len(X) == len(y)
     return X, y
 
-def load_train_valid_test(train_size,valid_size,test_size,batch_size):
+
+def load_train_valid_test(train_size, valid_size, test_size, batch_size):
     """Load training, validation, and test data 
 
     Args:
@@ -58,27 +59,27 @@ def load_train_valid_test(train_size,valid_size,test_size,batch_size):
     train_start, train_stop = 0, train_size
     assert train_stop > train_start
     assert (len(decays)*train_size) % batch_size == 0
-    X_train, y_train = load_data(train_start,train_stop)
+    X_train, y_train = load_data(train_start, train_stop)
 
     # Set range of validation set
     valid_start, valid_stop = 160000, 160000+valid_size
-    assert valid_stop  >  valid_start
+    assert valid_stop > valid_start
     assert valid_start >= train_stop
-    X_valid, y_valid = load_data(valid_start,valid_stop)
+    X_valid, y_valid = load_data(valid_start, valid_stop)
 
     # Set range of test set
     test_start, test_stop = 204800, 204800+test_size
-    assert test_stop  >  test_start
+    assert test_stop > test_start
     assert test_start >= valid_stop
-    X_test, y_test = load_data(test_start,test_stop)
+    X_test, y_test = load_data(test_start, test_stop)
 
     samples_requested = len(decays) * (train_size + valid_size + test_size)
     samples_available = len(y_train) + len(y_valid) + len(y_test)
     assert samples_requested == samples_available
-    return (X_train,y_train),(X_valid,y_valid),(X_test,y_test)
+    return (X_train, y_train), (X_valid, y_valid), (X_test, y_test)
 
 
-def remove_empty_pixels(X,low_e=0,abstime=100):
+def remove_empty_pixels(X, low_e=0, abstime=100):
     """Set empty energy deposit pixels to np.nan
 
     Args:
@@ -87,11 +88,25 @@ def remove_empty_pixels(X,low_e=0,abstime=100):
     Returns:
         X (numpy.array): array of collider images, shape(-1,32,32,2)
     """
-    mask = (X[:, :, :, 0] > low_e) & (np.abs(X[:,:,:,1]) < abstime)
+    mask = (X[:, :, :, 0] > low_e) & (np.abs(X[:, :, :, 1]) < abstime)
     e_X = np.where(~mask, np.nan, X[:, :, :, 0])
     t_X = np.where(~mask, np.nan, X[:, :, :, 1])
     X = np.concatenate([e_X[:, :, :, None], t_X[:, :, :, None]], axis=-1)
     return X
+
+def crop_images(X,crop):
+    """Crop 32x32 collider images
+
+    Args:
+        X (numpy.array): array of collider images, shape(-1,32,32,2)
+        crop (int): square dimension to crop collider images too, crop = 22 -> 22x22
+
+    Returns:
+        numpy.array: array of cropped collider images
+    """
+    crop = (32 - crop)//2
+    lo,hi = crop, 32 - crop
+    return X[:,lo:hi,lo:hi]
 
 def unique_times(X, remove_empty=True):
     """Create an array of unique hit times for each event
@@ -103,11 +118,14 @@ def unique_times(X, remove_empty=True):
     Returns:
         numpy.array: array of sorted unique hit times for each event
     """
-    if remove_empty: X = remove_empty_pixels(X)
-    X_t = X[:,:,:,1].reshape(-1,32*32) # get the time channel and flatten 
-    X_t_sorted = np.sort(X_t,axis=-1) # sort timing
-    dup_runs = ak.run_lengths(X_t_sorted.flatten()) # count number of hits that occured at the same times 
-    mask = ak.unflatten(ak.sum(dup_runs)*[False], dup_runs) # create mask to only keep one of each time
+    if remove_empty:
+        X = remove_empty_pixels(X)
+    X_t = X[:, :, :, 1].reshape(-1, 32*32)  # get the time channel and flatten
+    X_t_sorted = np.sort(X_t, axis=-1)  # sort timing
+    # count number of hits that occured at the same times
+    dup_runs = ak.run_lengths(X_t_sorted.flatten())
+    # create mask to only keep one of each time
+    mask = ak.unflatten(ak.sum(dup_runs)*[False], dup_runs)
     mask = ak.flatten(ak.concatenate(
         [~mask[:, 0, None], mask[:, 1:]], axis=-1)).to_numpy().reshape(X_t_sorted.shape)
     unique_X_t_sorted = np.sort(np.where(mask, X_t_sorted, np.nan), axis=-1)
@@ -140,7 +158,7 @@ def timeordered_BC(X, cumulative=False, remove_empty=True, low_e=0.005, min_t=-0
     t_step: time step 
     """
     if remove_empty:
-        X = remove_empty_pixels(X,low_e)
+        X = remove_empty_pixels(X, low_e)
     X_e, X_t = X[:, :, :, 0], X[:, :, :, 1]  # Decompose energy and time
     n_images, width, height, channels = X.shape  # Find shape of images
     t_bins = np.arange(min_t, max_t, t_step)  # Bin separation for images
@@ -169,179 +187,3 @@ def timeordered_BC(X, cumulative=False, remove_empty=True, low_e=0.005, min_t=-0
             np.isnan(X_e_timeordered), 0, X_e_timeordered)
 
     return X_e_timeordered, X_t_timeordered, max_frames, t_bins
-
-
-def animate(X, y, t_bins, images=range(-1, 1), interval=500):
-    """
-    Animate images, from -5 to 5 (es and photons)
-    """
-    for i in images:
-        img = []
-        fig = plt.figure()
-        if y[i] == 1:
-            fig.suptitle('Electron')
-        else:
-            fig.suptitle('Photon')
-        for j in range(X.shape[1]-1):
-            label = f'{t_bins[j]:.2f} < t < {t_bins[j+1]:.2f}'
-            temp_img = X[i, j, :, :]
-            img.append([plt.imshow(temp_img, animated=True),
-                       plt.text(18, 28, label)])
-        ani = animation.ArtistAnimation(
-            fig, img, interval=interval, blit=True, repeat_delay=0)
-        plt.show()
-        ani.save(f'Energy_{i+abs(images[0])}.gif')
-        plt.close()
-    os.system('mv *.gif gifs/')
-    plt.close()
-
-def inline_animation(X,y,tbins,event=0,lo=0,interval=500,**kwargs):
-    decay = decayMap[y[event]]
-    fig, ax = plt.subplots()
-    frames = [
-        [ax.imshow( np.where(frame<=lo,np.nan,frame) ),ax.text(1,1,f"{decay}: ({tlo:.2f},{thi:.2f})")] for frame,tlo,thi in zip(X[event],tbins[:-1],tbins[1:])
-    ]
-    ani = animation.ArtistAnimation(fig,frames,interval=interval,**kwargs)
-    return ani
-
-def plot_image(X,mask=True,lo=0,figax=None):
-    if figax is None: figax = plt.subplots()
-    fig,ax = figax 
-    if mask: X = np.where(X<=lo,np.nan,X)
-    ax.imshow(X)
-
-def plot_event(X, y, event=0, channel=-1):
-    """Plot channels for given event
-
-    Args:
-        X (numpy.array): array of collider images, shape(-1,32,32,2)
-        y (numpy.array): array of collider image labels: Photon = 0, Electron = 1
-        event (int, optional): index of event to plot. Defaults to 0.
-        channel (int, optional): channel to plot: Energy = 0, Time = 1, Both = -1. Defaults to -1.
-    """
-    if channel == -1:
-        channels = [0, 1]
-    else:
-        channels = [channel]
-
-    fig, axs = plt.subplots(nrows=1, ncols=len(channels), figsize=(12, 5))
-
-    decay = decayMap[y[event]]
-    if len(channels) == 1:
-        im = axs.imshow(X[event, :, :, channel])
-        axs.set_title(channelMap[channel])
-        axs.grid(True)
-        fig.colorbar(im, ax=axs)
-
-    else:
-        for i, channel in enumerate(channels):
-            im = axs[i].imshow(X[event, :, :, channel])
-            axs[i].set_title(channelMap[channel])
-            axs[i].grid(True)
-            fig.colorbar(im, ax=axs[i])
-    fig.suptitle(decay)
-    fig.tight_layout()
-
-
-def plot_spacetime(X, y, event=0, azim=0, elev=0, lo=0, interactive=False):
-    """Plot 3D spacetime of specified event
-
-    Args:
-        X (numpy.array): array of collider images, shape(-1,32,32,2)
-        y (numpy.array): array of collider image labels: Photon = 0, Electron = 1
-        event (int, optional): index of event to plot. Defaults to 0.
-    """
-    index_map = np.indices((32, 32))
-
-    X = remove_empty_pixels(X,lo)
-
-    decay = decayMap[y[event]]
-    x = index_map[0][~np.isnan(X[event, :, :, 1])]
-    y = index_map[1][~np.isnan(X[event, :, :, 1])]
-    z = X[event, :, :, 1][~np.isnan(X[event, :, :, 1])]
-    c = X[event, :, :, 0][~np.isnan(X[event, :, :, 1])]
-    fig = plt.figure(figsize=(8,8))
-
-    if interactive:
-        ax = Axes3D(fig)
-    else:
-        ax = plt.axes(projection="3d")
-
-    # Creating plot
-    sc = ax.scatter(x, y, z, s=1000*c, alpha=0.5, c=c)
-    ax.set_xlim(10, 20)
-    ax.set_ylim(10, 20)
-    ax.set_zlim(-0.015,0.01)
-    ax.set(xlabel='X', ylabel='Y', zlabel='Time')
-    ax.view_init(azim=azim, elev=elev)
-    ax.set_title(f'{decay}')
-    # fig.colorbar(sc)
-    return fig,ax
-
-def plot_roc(y_true, y_pred):
-    """Plot ROC Curve
-
-    Args:
-        y_true (numpy.array): array of true labels
-        y_pred (numpy.array): array of predicted labels
-    """
-    fpr, tpr, thresholds = roc_curve(y_true, y_pred)
-    auc = roc_auc_score(y_true, y_pred)
-
-    line = [0,1]
-    plt.plot(line,line,'k--')
-    plt.plot(fpr, tpr)
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title(f'ROC Curve (AUC = {auc:.3f})')
-    plt.show()
-
-def plot_history(history,metric='loss'):
-    if type(history) != dict: history = history.history
-
-    loss = history[metric]
-    val_loss = history[f'val_{metric}']
-    
-    plt.plot(loss,label='Training')
-    plt.plot(val_loss,label='Validation')
-    plt.xlabel('Epoch')
-    plt.ylabel(metric.capitalize())
-    plt.legend()
-    plt.show()
-
-def plot_abstime(X,y,bins=100,energy_weights=False,figax=None):
-    if figax is None: figax = plt.subplots()
-    fig,ax = figax 
-
-    ph_times = X[:,:,:,1][y == 0].flatten()
-    ph_energy = X[:,:,:,0][y == 0].flatten()
-    ph_weight = ph_energy if energy_weights else None
-
-    el_times = X[:,:,:,1][y == 1].flatten()
-    el_energy = X[:,:,:,0][y == 1].flatten()
-    el_weight = el_energy if energy_weights else None
-
-    ph_hist,bins,_ = ax.hist(np.abs(ph_times),bins=bins,density=1,histtype='step',label='Photon',weights=ph_weight)
-    el_hist,bins,_ = ax.hist(np.abs(el_times),bins=bins,density=1,histtype='step',label='Electron',weights=el_weight)
-    ax.set(xlabel='Absolute Time',ylabel='Density')
-    ax.legend()
-    return fig,ax
-
-def plot_abstime_cdf(X,y,bins=100,energy_weights=False,figax=None):
-    if figax is None: figax = plt.subplots()
-    fig,ax = figax 
-
-    ph_times = X[:,:,:,1][y == 0].flatten()
-    ph_energy = X[:,:,:,0][y == 0].flatten()
-    ph_weight = ph_energy if energy_weights else None
-
-    el_times = X[:,:,:,1][y == 1].flatten()
-    el_energy = X[:,:,:,0][y == 1].flatten()
-    el_weight = el_energy if energy_weights else None
-
-    ph_cdf,bins,_ = ax.hist(np.abs(ph_times.flatten()),bins=bins,density=1,histtype='step',cumulative=True,label='Photon',weights=ph_weight)
-    el_cdf,bins,_ = ax.hist(np.abs(el_times.flatten()),bins=bins,density=1,histtype='step',cumulative=True,label='Electron',weights=el_weight)
-    ax.set(xlabel='Absolute Time',ylabel='Cumulative Percent',ylim=(0.5,1.1))
-    ax.grid()
-    ax.legend()
-    return fig,ax
