@@ -389,14 +389,14 @@ def plot_roc(y_true, y_pred,save=False,fname=''):
     auc = roc_auc_score(y_true, y_pred)
 
     line = [0,1]
+    fig = plt.figure()
     plt.plot(line,line,'k--')
     plt.plot(fpr, tpr)
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
     plt.title(f'ROC Curve (AUC = {auc:.3f})')
     if save:
-        save_plot(fname)
-        plt.close()
+        save_plot(fname) 
     else:
         plt.show()
 
