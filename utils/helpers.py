@@ -502,11 +502,7 @@ def Bear_net_3D(input,model_name):
   x = Flatten()(x)
   x = Dropout(0.4)(x)
   x = Dense(100,activation='relu')(x)
-<<<<<<< HEAD
   output = Dense(2, activation='softmax', kernel_initializer='TruncatedNormal')(x)
-=======
-  output = Dense(1, activation='sigmoid', kernel_initializer='TruncatedNormal')(x)
->>>>>>> c2abc9154723aafb08afc9dc28dc306b59c8e92a
   return Model([input],output,name=model_name)
 
 def plot_spacetime(X, y, event=0, azim=0, elev=0, lo=0, interactive=False):
