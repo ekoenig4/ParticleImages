@@ -376,6 +376,7 @@ def plot_history(history,metric='loss',save=False,fname=''):
     plt.legend()
     if save:
         save_plot(fname)
+        plt.close()
     else:
         plt.show()
 def plot_roc(y_true, y_pred,save=False,fname=''):
@@ -395,6 +396,7 @@ def plot_roc(y_true, y_pred,save=False,fname=''):
     plt.title(f'ROC Curve (AUC = {auc:.3f})')
     if save:
         save_plot(fname)
+        plt.close()
     else:
         plt.show()
 

@@ -67,18 +67,14 @@ input_3d = Input(shape=(maxframes,32, 32, 1))
 model_name = 'rcnn_3d_2'
 
 x = ConvLSTM2D(filters=32, kernel_size=3,padding='same', activation='relu',return_sequences=True)(input_3d)
-x = AveragePooling3D(pool_size=2)(x)
+x = AveragePooling3D()(x)
 x = BatchNormalization()(x)
 
-x = ConvLSTM2D(filters=64, kernel_size=2,padding='same',activation='relu',return_sequences=True)(x)
-x = AveragePooling3D(pool_size=2)(x)
-#x = BatchNormalization()(x)
-
-x = Conv3D(filters=128, kernel_size=2,padding='same', activation='relu')(x)
+x = Conv3D(filters=64, kernel_size=2,padding='same', activation='relu')(x)
 x = MaxPooling3D(2)(x)
 #x = BatchNormalization()(x)
 
-x = Conv3D(filters=256, kernel_size=1,padding='same', activation='relu')(x)
+x = Conv3D(filters=32, kernel_size=2,padding='same', activation='relu')(x)
 x = MaxPooling3D(2)(x)
 #x = BatchNormalization()(x)
 
@@ -91,13 +87,13 @@ x = Dense(units=256, activation='relu')(x)
 
 output = Dense(2, activation='softmax', kernel_initializer='TruncatedNormal')(x)
 model_2 = Model([input_3d],output,name=model_name)
-#model_2.summary()
+model_2.summary()
 
 plot_model(model_2,show_shapes=True,to_file=f'{model_name}.png')
 system('mv *.png Models/');
 #Checkpoint and reduce lr
 reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=2, min_lr=1.e-6)
-checkpoint_cb = ModelCheckpoint("conv3d_1.h5", save_best_only=True)
+checkpoint_cb = ModelCheckpoint(f'{model_name}.h5', save_best_only=True)
 
 #Compile
 model_2.compile(loss='binary_crossentropy', optimizer=Adam(learning_rate=lr_init),metrics=['accuracy'])

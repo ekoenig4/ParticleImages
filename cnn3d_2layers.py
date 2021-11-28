@@ -66,23 +66,23 @@ input_3d = Input(shape=(maxframes,32, 32, 1))
 #MRI scan conv3d 
 model_name = 'cnn_3d_2layer_1'
 
-x = Conv3D(filters=64, kernel_size=3,padding='same', activation='relu')(input_3d)
-x = Conv3D(filters=64, kernel_size=3,padding='same', activation='relu')(x)
+x = Conv3D(filters=32, kernel_size=3,padding='same', activation='relu')(input_3d)
+x = Conv3D(filters=32, kernel_size=3,padding='same', activation='relu')(x)
 x = MaxPooling3D(pool_size=2)(x)
 x = BatchNormalization()(x)
 
-x = Conv3D(filters=64, kernel_size=3,padding='same',activation='relu')(x)
-x = Conv3D(filters=64, kernel_size=3,padding='same',activation='relu')(x)
+x = Conv3D(filters=48, kernel_size=3,padding='same',activation='relu')(x)
+x = Conv3D(filters=48, kernel_size=3,padding='same',activation='relu')(x)
 x = MaxPooling3D(2)(x)
 #x = BatchNormalization()(x)
 
-x = Conv3D(filters=128, kernel_size=2,padding='same', activation='relu')(x)
-x = Conv3D(filters=128, kernel_size=2,padding='same', activation='relu')(x)
+x = Conv3D(filters=64, kernel_size=2,padding='same', activation='relu')(x)
+x = Conv3D(filters=64, kernel_size=2,padding='same', activation='relu')(x)
 x = MaxPooling3D(2)(x)
 #x = BatchNormalization()(x)
 
-x = Conv3D(filters=256, kernel_size=1,padding='same', activation='relu')(x)
-x = Conv3D(filters=256, kernel_size=1,padding='same', activation='relu')(x)
+x = Conv3D(filters=80, kernel_size=1,padding='same', activation='relu')(x)
+x = Conv3D(filters=80, kernel_size=1,padding='same', activation='relu')(x)
 x = MaxPooling3D(2)(x)
 #x = BatchNormalization()(x)
 
@@ -101,7 +101,7 @@ plot_model(model_1,show_shapes=True,to_file=f'{model_name}.png')
 system('mv *.png Models/');
 #Checkpoint and reduce lr
 reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=2, min_lr=1.e-6)
-checkpoint_cb = ModelCheckpoint("conv3d_1.h5", save_best_only=True)
+checkpoint_cb = ModelCheckpoint(f'{model_name}.h5', save_best_only=True)
 
 #Compile
 model_1.compile(loss='binary_crossentropy', optimizer=Adam(learning_rate=lr_init),metrics=['accuracy'])
