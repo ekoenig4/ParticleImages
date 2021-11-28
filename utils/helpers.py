@@ -2,12 +2,40 @@ import numpy as np
 import awkward as ak
 import matplotlib.pyplot as plt
 import h5py
-from keras.layers import TimeDistributed, Reshape, Input, Dense, Dropout, Flatten, Conv3D, MaxPooling3D,Conv2D, MaxPooling2D,BatchNormalization,AveragePooling2D, concatenate
+from keras.layers import AveragePooling3D,TimeDistributed, Reshape, Input, Dense, Dropout, Flatten, Conv3D, MaxPooling3D,Conv2D, MaxPooling2D,BatchNormalization,AveragePooling2D, concatenate
 from sklearn.metrics import roc_curve, auc, confusion_matrix,roc_auc_score
 from keras.models import Model
 
 from matplotlib import animation
 import os
+from datetime import date
+
+#Plot organization
+def format_plots():
+  if 'science' in plt.style.available:
+    plt.style.use('science')
+  else:
+    os.system('pip install SciencePlots -q')
+    plt.style.reload_library()
+    plt.style.use('science')
+
+
+
+def make_plot_dir():
+    day = date.today().strftime("%d_%m_%Y")
+    isDir = os.path.isdir("Plots/Plots_"+day)
+    if isDir == False:
+        os.system("mkdir -p Plots_" +day)
+        os.system("mv -n Plots_" +day+"/ Plots/")
+
+def save_plot(fname):
+    day = date.today().strftime("%d_%m_%Y")
+    plt.savefig(fname,bbox_inches = "tight")
+    os.system("mv " + fname + "* Plots/Plots_" +day+"/")
+
+def plot_stuff():
+  format_plots()
+  make_plot_dir()
 
 def animate(X,y,t_bins,images=range(-1,1),interval=500):
     """
@@ -163,7 +191,7 @@ def inception2D(input,filter_sizes=[60,50,40]):
   #mid_1 = concatenate([layer_2, layer_3, layer_4], axis = 3)
   return mid_1
 
-def inception3D(input,filter_sizes=[30,20,10]):
+def inception3D(input,filter_sizes=[32,16,8]):
   """
   input: previous layer's output
   filter_sizes: sizes of kernels (1x1,2x2,3x3)
@@ -337,7 +365,7 @@ def time_channels(X,normalize=False):
     xy = np.sum(X_temp,axis=1)
     yt = np.sum(X_temp,axis=2)
     return np.stack((xy,xt,yt),axis=3) #xy is channel 0, xt is channel 1, yt is channel 2
-def plot_history(history,metric='loss'):
+def plot_history(history,metric='loss',save=False,fname=''):
     loss = history.history[metric]
     val_loss = history.history[f'val_{metric}']
     
@@ -346,8 +374,11 @@ def plot_history(history,metric='loss'):
     plt.xlabel('Epoch')
     plt.ylabel(metric.capitalize())
     plt.legend()
-    plt.show()
-def plot_roc(y_true, y_pred):
+    if save:
+        save_plot(fname)
+    else:
+        plt.show()
+def plot_roc(y_true, y_pred,save=False,fname=''):
     """Plot ROC Curve
     Args:
         y_true (numpy.array): array of true labels
@@ -362,7 +393,10 @@ def plot_roc(y_true, y_pred):
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
     plt.title(f'ROC Curve (AUC = {auc:.3f})')
-    plt.show()
+    if save:
+        save_plot(fname)
+    else:
+        plt.show()
 
 def average_slice(tc_data,y):
   tc_data_e = [] #Electron
@@ -440,6 +474,37 @@ def google_net(input):
   output = Dense(1, activation='sigmoid', kernel_initializer='TruncatedNormal')(dense_1)
   return Model([input],output)
 
+def Bear_net_3D(input,model_name):
+  x = Conv3D(strides=1,
+                  filters=100, 
+                  activation='relu', 
+                  kernel_size=3, 
+                  padding='same', 
+                  kernel_initializer='TruncatedNormal')(input)
+  x = MaxPooling3D(pool_size=2,strides=2,padding='same')(x)
+  x = Conv3D(strides=1,
+                  filters=200, 
+                  activation='relu', 
+                  kernel_size=1, 
+                  padding='same', 
+                  kernel_initializer='TruncatedNormal')(x)
+  x = MaxPooling3D(pool_size=2,strides=1,padding='same')(x)
+  x = inception3D(x)
+  x = inception3D(x)
+  x = MaxPooling3D(pool_size=2,strides=2,padding='same')(x)
+  filter_sizes=[60,40,20]
+  x = inception3D(x,filter_sizes=filter_sizes)
+  x = inception3D(x,filter_sizes=filter_sizes)
+  x = AveragePooling3D(pool_size=2,padding='same')(x)
+  x = inception3D(x,filter_sizes=filter_sizes)
+  x = inception3D(x,filter_sizes=filter_sizes)
+  x = AveragePooling3D(pool_size=2,padding='same')(x)
+  x = Flatten()(x)
+  x = Dropout(0.4)(x)
+  x = Dense(100,activation='relu')(x)
+  output = Dense(2, activation='softmax', kernel_initializer='TruncatedNormal')(x)
+  return Model([input],output,name=model_name)
+
 def plot_spacetime(X, y, event=0, azim=0, elev=0, lo=0, interactive=False):
     """Plot 3D spacetime of specified event
     Args:
@@ -473,4 +538,3 @@ def plot_spacetime(X, y, event=0, azim=0, elev=0, lo=0, interactive=False):
     ax.set_title(f'{decay}')
     # fig.colorbar(sc)
     return fig,ax
-    
