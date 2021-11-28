@@ -2,7 +2,7 @@ import numpy as np
 import awkward as ak
 import matplotlib.pyplot as plt
 import h5py
-from keras.layers import TimeDistributed, Reshape, Input, Dense, Dropout, Flatten, Conv3D, MaxPooling3D,Conv2D, MaxPooling2D,BatchNormalization,AveragePooling2D, concatenate
+from keras.layers import AveragePooling3D,TimeDistributed, Reshape, Input, Dense, Dropout, Flatten, Conv3D, MaxPooling3D,Conv2D, MaxPooling2D,BatchNormalization,AveragePooling2D, concatenate
 from sklearn.metrics import roc_curve, auc, confusion_matrix,roc_auc_score
 from keras.models import Model
 
@@ -191,7 +191,7 @@ def inception2D(input,filter_sizes=[60,50,40]):
   #mid_1 = concatenate([layer_2, layer_3, layer_4], axis = 3)
   return mid_1
 
-def inception3D(input,filter_sizes=[30,20,10]):
+def inception3D(input,filter_sizes=[32,16,8]):
   """
   input: previous layer's output
   filter_sizes: sizes of kernels (1x1,2x2,3x3)
@@ -473,6 +473,37 @@ def google_net(input):
   dense_1 = Dense(1000,activation='relu')(dropout_1)
   output = Dense(1, activation='sigmoid', kernel_initializer='TruncatedNormal')(dense_1)
   return Model([input],output)
+
+def Bear_net_3D(input,model_name):
+  x = Conv3D(strides=1,
+                  filters=100, 
+                  activation='relu', 
+                  kernel_size=3, 
+                  padding='same', 
+                  kernel_initializer='TruncatedNormal')(input)
+  x = MaxPooling3D(pool_size=2,strides=2,padding='same')(x)
+  x = Conv3D(strides=1,
+                  filters=200, 
+                  activation='relu', 
+                  kernel_size=1, 
+                  padding='same', 
+                  kernel_initializer='TruncatedNormal')(x)
+  x = MaxPooling3D(pool_size=2,strides=1,padding='same')(x)
+  x = inception3D(x)
+  x = inception3D(x)
+  x = MaxPooling3D(pool_size=2,strides=2,padding='same')(x)
+  filter_sizes=[60,40,20]
+  x = inception3D(x,filter_sizes=filter_sizes)
+  x = inception3D(x,filter_sizes=filter_sizes)
+  x = AveragePooling3D(pool_size=2,padding='same')(x)
+  x = inception3D(x,filter_sizes=filter_sizes)
+  x = inception3D(x,filter_sizes=filter_sizes)
+  x = AveragePooling3D(pool_size=2,padding='same')(x)
+  x = Flatten()(x)
+  x = Dropout(0.4)(x)
+  x = Dense(100,activation='relu')(x)
+  output = Dense(1, activation='sigmoid', kernel_initializer='TruncatedNormal')(x)
+  return Model([input],output,name=model_name)
 
 def plot_spacetime(X, y, event=0, azim=0, elev=0, lo=0, interactive=False):
     """Plot 3D spacetime of specified event
