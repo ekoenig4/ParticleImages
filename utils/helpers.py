@@ -16,18 +16,14 @@ decayMap = {0: 'Photon', 1: 'Electron'}
 
 
 class MinMaxScaler:
-    def __init__(self, energy_cutoff=0.0):
-        self.cutoff = energy_cutoff
-
     def fit(self, X):
-        self.minim = np.nanmin(X)
-        self.maxim = np.nanmax(X)
-        self.cutoff = (self.cutoff-self.minim)/(self.maxim-self.minim)
+        nfeatures = X.shape[-1]
+        self.minim = np.nanmin( X.reshape(-1,nfeatures),axis=0 )
+        self.maxim = np.nanmax( X.reshape(-1,nfeatures),axis=0 )
         return self
 
     def transform(self, X):
         X = (X-self.minim)/(self.maxim-self.minim)
-        X = np.where(X > self.cutoff, X, 0)
         return X
 
 
@@ -135,25 +131,28 @@ def unique_times(X, remove_empty=True):
     return unique_X_t_sorted
 
 
-def timeordered(X, cumulative=False):
-    X_unraveled = X.reshape(-1, 32*32, 2)
-    X_t_timeordered = unique_times(X)
-    maxframes = np.max(np.sum(~np.isnan(X_t_timeordered), axis=-1))
-    X_t_timeordered = X_t_timeordered[:, :maxframes]
+def timeordered(X, cumulative=True, low_e=0.005, min_t=-0.1, max_t=0.1, t_step=0.0099):
+    X = remove_empty_pixels(X, low_e)
+    time_bins = np.arange(min_t, max_t, t_step)
+    maxframes = len(time_bins)-1
+    lo_times, hi_times = time_bins[:-1], time_bins[1:]
+
+    X_t_unraveled = X[:, :, :, 1].reshape(-1, 1, 32*32)
 
     if cumulative:
-        frame_masks = (X_unraveled[:, None, :, 1] <=
-                       X_t_timeordered[:, :, None])
+        mask = (X_t_unraveled <=
+                hi_times[:, None]).reshape(-1, maxframes, 32, 32, 1)
     else:
-        frame_masks = (X_unraveled[:, None, :, 1] ==
-                       X_t_timeordered[:, :, None])
+        mask = ((X_t_unraveled <= hi_times[:, None]) & (
+            X_t_unraveled > lo_times[:, None])).reshape(-1, maxframes, 32, 32, 1)
 
-    X_e_timeordered = np.where(
-        ~frame_masks, np.nan, X_unraveled[:, None, :, 0]).reshape(-1, maxframes, 32, 32, 1)
-    return X_e_timeordered, X_t_timeordered, maxframes
+    X = np.where(mask, X[:, None, :, :, :], np.nan)
+    X = np.where(np.isnan(X), 0, X)
+
+    return X, maxframes, time_bins
 
 
-def timeordered_BC(X, cumulative=False, remove_empty=True, low_e=0.005, min_t=-0.05, max_t=0.05, t_step=0.0099):
+def timeordered_BC(X, cumulative=True, remove_empty=True, low_e=0.005, min_t=-0.1, max_t=0.1, t_step=0.0099):
     """
     X: Image dataset of 32x32 pixels
     cumulative: Keep earlier hits in later time slices
