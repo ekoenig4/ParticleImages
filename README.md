@@ -8,7 +8,7 @@ Here we present a challenge where one of the detectors (the Electromagnetic Calo
 Each pixel in the image corresponds to a detector cell, while the intensity of the pixel corresponds to how much energy is measured in that cell. Timing of the energy deposits are also available, though this may or may not be relevant. The dataset contains 32x32 Images of the energy hits and their timing (channel 1: hit energy and channel 2: its timing) in each calorimeter cell (one cell = one pixel) for the two classes of particles: Electrons and Photons. The dataset contains around four hundred thousand images for electrons and photons. Please note that your final model will be evaluated on an unseen test dataset. 
 ## Challenge 1 - CNN
 Please use a Machine Learning model of your choice to achieve the highest possible classification performance on the provided dataset. 
-### Example Notebook of CNN based approach:      [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ML4SCI/ML4SCIHackathon/blob/main/ParticleImagesChallenge/ParticleImages.ipynb)
+### Our CNN approach:      [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1btmWSPRUtL2b-md_Iaxw7vtdSOasp61Y)
 
 ## Evaluation Metrics  
 * ROC curve (Receiver Operating Characteristic curve) and AUC score (Area Under the ROC Curve)   
