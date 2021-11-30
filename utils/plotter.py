@@ -31,13 +31,20 @@ def animate(X, y, t_bins, images=range(-1, 1), interval=500):
     os.system('mv *.gif gifs/')
     plt.close()
 
-def inline_animation(X,y,tbins,event=0,lo=0,interval=500,**kwargs):
+
+def inline_animation(X, y, tbins, event=0, lo=0, interval=500, figsize=(12, 8), **kwargs):
     decay = decayMap[y[event]]
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=figsize)
+    energy = X[event]
+    maxen = np.max(energy)
     frames = [
-        [ax.imshow( np.where(frame<=lo,np.nan,frame) ),ax.text(1,1,f"{decay}: ({tlo:.2f},{thi:.2f})")] for frame,tlo,thi in zip(X[event],tbins[:-1],tbins[1:])
+        [
+            ax.imshow(np.where(frame <= lo, np.nan, frame),vmin=0,vmax=maxen), 
+            ax.text(1, 1, f"{decay}: ({tlo:.2f},{thi:.2f})"),
+        ] 
+        for frame, tlo, thi in zip(energy, tbins[:-1], tbins[1:])
     ]
-    ani = animation.ArtistAnimation(fig,frames,interval=interval,**kwargs)
+    ani = animation.ArtistAnimation(fig, frames, interval=interval, **kwargs)
     return ani
 
 def plot_image(X,mask=True,lo=0,figax=None, log=False):
@@ -91,13 +98,14 @@ def plot_spacetime(X, y, event=0, azim=0, elev=0, lo=0, interactive=False):
     """
     index_map = np.indices((32, 32))
 
-    X = remove_empty_pixels(X,lo)
-
     decay = decayMap[y[event]]
-    x = index_map[0][~np.isnan(X[event, :, :, 1])]
-    y = index_map[1][~np.isnan(X[event, :, :, 1])]
-    z = X[event, :, :, 1][~np.isnan(X[event, :, :, 1])]
-    c = X[event, :, :, 0][~np.isnan(X[event, :, :, 1])]
+    spacetime,_ = spacetime_scatter(X,lo)
+
+    e = spacetime[event,:,0]
+    t = spacetime[event,:,1]
+    x = spacetime[event,:,2]
+    y = spacetime[event,:,3]
+
     fig = plt.figure(figsize=(8,8))
 
     if interactive:
@@ -106,33 +114,33 @@ def plot_spacetime(X, y, event=0, azim=0, elev=0, lo=0, interactive=False):
         ax = plt.axes(projection="3d")
 
     # Creating plot
-    sc = ax.scatter(x, y, z, s=1000*c, alpha=0.5, c=c)
+    sc = ax.scatter(x, y, t, s=1000*e, alpha=0.5, c=e)
     ax.set_xlim(10, 20)
     ax.set_ylim(10, 20)
-    ax.set_zlim(-0.015,0.01)
     ax.set(xlabel='X', ylabel='Y', zlabel='Time')
     ax.view_init(azim=azim, elev=elev)
     ax.set_title(f'{decay}')
     # fig.colorbar(sc)
     return fig,ax
 
-def plot_roc(y_true, y_pred):
+def plot_roc(y_true, y_pred,figax=None):
     """Plot ROC Curve
 
     Args:
         y_true (numpy.array): array of true labels
         y_pred (numpy.array): array of predicted labels
     """
+    if figax is None: figax = plt.subplots()
+    fig,ax = figax
     fpr, tpr, thresholds = roc_curve(y_true, y_pred)
     auc = roc_auc_score(y_true, y_pred)
 
     line = [0,1]
-    plt.plot(line,line,'k--')
-    plt.plot(fpr, tpr)
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title(f'ROC Curve (AUC = {auc:.3f})')
-    plt.show()
+    ax.plot(line,line,'k--')
+    ax.plot(fpr, tpr)
+    ax.set_xlabel('False Positive Rate')
+    ax.set_ylabel('True Positive Rate')
+    ax.set_title(f'ROC Curve (AUC = {auc:.3f})')
 
 def plot_history(history,metric='loss'):
     if type(history) != dict: history = history.history

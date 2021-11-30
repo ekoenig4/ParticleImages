@@ -1,11 +1,14 @@
 import numpy as np
 import awkward as ak
 import h5py
+import git
+
+GIT_WD = git.Repo('.', search_parent_directories=True).working_tree_dir
 
 import os
 
 img_rows, img_cols, nb_channels = 32, 32, 2
-input_dir = 'data'
+input_dir = f'{GIT_WD}/data'
 decays = ['SinglePhotonPt50_IMGCROPS_n249k_RHv1',
           'SingleElectronPt50_IMGCROPS_n249k_RHv1']
 channelMap = {0: 'Energy', 1: 'Time'}
@@ -187,3 +190,17 @@ def timeordered_BC(X, cumulative=False, remove_empty=True, low_e=0.005, min_t=-0
             np.isnan(X_e_timeordered), 0, X_e_timeordered)
 
     return X_e_timeordered, X_t_timeordered, max_frames, t_bins
+
+def spacetime_scatter(X,low_e=0,abstime=100):
+    index_map = np.indices((32, 32)).reshape(2,1,32*32)
+    X = remove_empty_pixels(X,low_e,abstime).reshape(-1,32*32,2)
+    hit_e = X[:,:,0].reshape(-1,32*32,1)
+    hit_t = X[:,:,1].reshape(-1,32*32,1)
+    hit_x = np.where(~np.isnan(X[:,:,0]),index_map[0],np.nan).reshape(-1,32*32,1)
+    hit_y = np.where(~np.isnan(X[:,:,0]),index_map[1],np.nan).reshape(-1,32*32,1)
+    hit_features = np.concatenate([hit_e,hit_t,hit_x,hit_y],axis=-1)
+    timeorder = hit_features[:,:,1].argsort()
+    for i,(features,order) in enumerate(zip(hit_features,timeorder)):
+        hit_features[i,:,:] = features[order]
+    maxhits = np.max(np.sum(~np.isnan(hit_features[:,:,0]),axis=-1))
+    return hit_features[:,:maxhits,:],maxhits
