@@ -23,16 +23,13 @@ parser = ArgumentParser()
 parser.add_argument("--lr-init", help="Learning rate",
                     type=float, default=1.e-3)
 parser.add_argument(
-    "--batch-size", help="Training batch size", type=int, default=400)
+    "--batch-size", help="Training batch size", type=int, default=500)
 parser.add_argument("--train-size", help="Training size",
-                    type=int, default=50000)
+                    type=int, default=100000)
 parser.add_argument("--valid-size", help="Validation size",
-                    type=int, default=5000)
+                    type=int, default=50000)
 parser.add_argument(
-    "--epochs", help="Number of epochs to train", type=int, default=20)
-parser.add_argument(
-    "--t-range", help="Time range cutoff (-t_range,t_range)", type=float, default=0.099)
-parser.add_argument("--t-step", help="Time step", type=float, default=0.0099)
+    "--epochs", help="Number of epochs to train", type=int, default=100)
 parser.add_argument(
     "--iteration", help="Specify interaction running incase of parallel models", type=int, default=-1)
 parser.add_argument(
@@ -80,28 +77,6 @@ def inception_module(x,
     pool_proj = Conv2D(filters_pool_proj, (1, 1), padding='same', activation='relu', kernel_initializer=kernel_init, bias_initializer=bias_init)(pool_proj)
 
     output = concatenate([conv_1x1, conv_3x3, conv_5x5, pool_proj], axis=3, name=name)
-    
-    return output
-
-def inception_module_b(x,
-                     filters_1x1,
-                     filters_3x3_reduce,
-                     filters_3x3,
-                     filters_5x5_reduce,
-                     filters_5x5,
-                     filters_pool_proj,
-                     name=None):
-    
-    conv_3x3 = Conv2D(filters_3x3_reduce, (1, 1), padding='same', activation='relu', kernel_initializer=kernel_init, bias_initializer=bias_init)(x)
-    conv_3x3 = Conv2D(filters_3x3, (3, 3), padding='same', activation='relu', kernel_initializer=kernel_init, bias_initializer=bias_init)(conv_3x3)
-
-    conv_5x5 = Conv2D(filters_5x5_reduce, (1, 1), padding='same', activation='relu', kernel_initializer=kernel_init, bias_initializer=bias_init)(x)
-    conv_5x5 = Conv2D(filters_5x5, (5, 5), padding='same', activation='relu', kernel_initializer=kernel_init, bias_initializer=bias_init)(conv_5x5)
-
-    pool_proj = MaxPool2D((3, 3), strides=(1, 1), padding='same')(x)
-    pool_proj = Conv2D(filters_pool_proj, (1, 1), padding='same', activation='relu', kernel_initializer=kernel_init, bias_initializer=bias_init)(pool_proj)
-
-    output = concatenate([conv_3x3, conv_5x5, pool_proj], axis=3, name=name)
     
     return output
 
@@ -155,6 +130,7 @@ model = bearnet_truncated(input)
 model.summary()
 
 reduce_lr = callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=2, min_lr=1.e-6)
+earlystop = callbacks.EarlyStopping(monitor='loss', patience=3)
 
 model.compile(loss='binary_crossentropy', optimizer=optimizers.Adam(
     learning_rate=args.lr_init), metrics=['accuracy',AUC()])
@@ -163,7 +139,7 @@ history=model.fit(X_train[:,:,:,0], y_b_train,
                   batch_size=args.batch_size,
                   epochs=args.epochs,
                   validation_data=(X_valid[:,:,:,0], y_b_valid),
-                  callbacks=[reduce_lr],
+                  callbacks=[reduce_lr,earlystop],
                   verbose=1, shuffle=True)
 
 if not args.no_save:
