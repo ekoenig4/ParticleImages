@@ -1,0 +1,2 @@
+round_epochs,loss,accuracy,auc,val_loss,val_accuracy,val_auc,lr,activation,nfilters_1,nfilters_2,nfilters_3,nfilters_4,nodes_1,nodes_2,shape_1,shape_2,shape_3,shape_4,t_step
+20,0.6064479947090149,0.6773999929428101,0.7330647706985474,0.676527202129364,0.5536999702453613,0.6134108304977417,1e-06,relu,96,96,64,64,32,64,5,1,1,5,0.00249
