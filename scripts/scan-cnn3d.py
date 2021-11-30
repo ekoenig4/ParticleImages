@@ -6,7 +6,6 @@ import utils.helpers as pic
 import numpy as np
 from tensorflow.keras import layers
 from tensorflow.keras.utils import to_categorical
-from tensorflow.keras.metrics import AUC
 from tensorflow.keras import callbacks
 from tensorflow import keras
 from argparse import ArgumentParser
@@ -17,12 +16,11 @@ np.random.seed(1337)  # for reproducibility
 
 parser = ArgumentParser()
 parser.add_argument("--train-size", help="Training size",
-                    type=int, default=10000)
+                    type=int, default=7500)
 parser.add_argument("--valid-size", help="Validation size",
-                    type=int, default=10000)
+                    type=int, default=7500)
 parser.add_argument(
-    "--t-range", help="Time range cutoff (-t_range,t_range)", type=float, default=0.1)
-parser.add_argument("--t-step", help="Time step", type=float, default=0.0099)
+    "--batch-size", help="Training batch size", type=int, default=50)
 parser.add_argument(
     "--iteration", help="Specify interaction running incase of parallel models", type=int, default=-1)
 parser.add_argument(
@@ -45,46 +43,50 @@ assert valid_start >= train_stop
 X_valid, y_valid = pic.load_data(valid_start, valid_stop)
 X_valid = pic.crop_images(X_valid,args.crop)
 
-X_e_train, X_t_train, maxframes, time_bins = pic.timeordered_BC(
-    X_train, cumulative=True, min_t=-args.t_range, max_t=args.t_range, t_step=args.t_step)
 y_b_train = to_categorical(y_train)
 
-X_e_valid, X_t_valid, _, _ = pic.timeordered_BC(
-    X_valid, cumulative=True, min_t=-args.t_range, max_t=args.t_range, t_step=args.t_step)
 y_b_valid = to_categorical(y_valid)
 
-def cnn3d_model(X_train,y_train,X_valid,y_valid,params):
+
+def cnn3d_model(X_train, y_train, X_valid, y_valid, params):
+    X_train, _, maxframes, _ = pic.timeordered_BC(
+        X_train, cumulative=params['cumulative'], min_t=-12*params['t_step'], max_t=12*params['t_step'], t_step=params['t_step'])
+    X_valid, _, _, _ = pic.timeordered_BC(
+        X_valid, cumulative=params['cumulative'], min_t=-12*params['t_step'], max_t=12*params['t_step'], t_step=params['t_step'])
+
     model = keras.Sequential()
 
     model.add(layers.Reshape((maxframes, args.crop, args.crop, 1),
-            input_shape=(maxframes, args.crop, args.crop)))
+                             input_shape=(maxframes, args.crop, args.crop)))
 
-    model.add(layers.Conv3D(params['nfilters_1'],params['shape_1'],activation=params['activation']))
-    model.add(layers.Dropout(params['dropout']))
+    model.add(layers.Conv3D(params['nfilters_1'], params['shape_1'],
+              padding='same', activation=params['activation']))
+    model.add(layers.Dropout(0.2))
     model.add(layers.BatchNormalization())
     model.add(layers.MaxPool3D())
 
-    model.add(layers.Conv3D(params['nfilters_2'],params['shape_2'],activation=params['activation']))
-    model.add(layers.Dropout(params['dropout']))
+    model.add(layers.Conv3D(params['nfilters_2'], params['shape_2'],
+              padding='same', activation=params['activation']))
+    model.add(layers.Dropout(0.2))
     model.add(layers.BatchNormalization())
     model.add(layers.MaxPool3D())
 
     model.add(layers.Flatten())
-    model.add(layers.Dense(params['nodes_1'],activation=params['activation']))
-    model.add(layers.Dense(params['nodes_2'],activation=params['activation']))
+    model.add(layers.Dense(params['nodes_1'], activation=params['activation']))
+    model.add(layers.Dense(params['nodes_2'], activation=params['activation']))
     model.add(layers.Dense(2, activation='softmax'))
 
     # model.summary()
 
     reduce_lr = callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=2, min_lr=1.e-6)
 
-    model.compile(loss='binary_crossentropy', optimizer=params['optimizer'], metrics=['accuracy',AUC()])
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     history = model.fit(
         X_train, y_train,
         validation_data=(X_valid, y_valid),
         epochs=args.epochs,
-        batch_size=params['batchsize'],
+        batch_size=args.batch_size,
         shuffle=True,
         callbacks=[reduce_lr],
         verbose=1
@@ -92,27 +94,33 @@ def cnn3d_model(X_train,y_train,X_valid,y_valid,params):
     return history,model
 
 
-params = {'activation': ['relu', 'elu'],
-          'optimizer': ['Nadam', 'Adam'],
-          'nfilters_1': [32, 64, 96],
-          'shape_1': [1, 3, 5],
-          'nfilters_2': [32, 64, 96],
-          'shape_2': [1, 3, 5],
-          'nodes_1': [32, 64, 96],
-          'nodes_2': [32, 64, 96],
-          'dropout': [0.2, 0.4, 0.6],
-          'batchsize': [50, 100, 150],
-          }
+params = {
+    'activation': ['elu'],
+    'nfilters_1': [64],
+    'shape_1': [5],
+    'nfilters_2': [96],
+    'shape_2': [3],
+    'nodes_1': [64],
+    'nodes_2': [32],
+    'cumulative':[True,False],
+    't_step': [0.00249, 0.0049, 0.0099, 0.049, 0.0249],
+    'dropout':[0.4,0.6,0.8]
+}
 
-output = f'scans/cnn3d-v2-{args.t_range:.2e}-{args.t_step:0.2e}-{args.crop}x{args.crop}'
+output = f'scans/cnn3d-v2-{args.crop}x{args.crop}'
 
-t = talos.Scan(x=X_e_train,
+talos.utils.gpu_utils.parallel_gpu_jobs(fraction=0.8)
+scan = talos.Scan(x=X_train,
                y=y_b_train,
-               x_val=X_e_valid,
+               x_val=X_valid,
                y_val=y_b_valid,
                model=cnn3d_model,
-               fraction_limit=.001,
                experiment_name=output,
+               fraction_limit=0.5,
                params=params,
                clear_session=True
                )
+
+talos.Evaluate(scan).evaluate
+
+
